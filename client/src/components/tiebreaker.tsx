@@ -299,12 +299,43 @@ export function Tiebreaker({ options, onComplete, className }: TiebreakerProps) 
 // Add animations for the tiebreaker components
 const styles = `
 @keyframes flip {
-  0% { transform: rotateY(0); }
-  100% { transform: rotateY(1800deg); }
+  0% { 
+    transform: rotateY(0) translateY(0); 
+    box-shadow: 0 5px 10px rgba(0,0,0,0.2);
+  }
+  25% { 
+    transform: rotateY(450deg) translateY(-60px); 
+    box-shadow: 0 15px 20px rgba(0,0,0,0.1);
+  }
+  50% { 
+    transform: rotateY(900deg) translateY(-30px); 
+    box-shadow: 0 10px 15px rgba(0,0,0,0.15);
+  }
+  75% { 
+    transform: rotateY(1350deg) translateY(-15px); 
+    box-shadow: 0 7px 10px rgba(0,0,0,0.2);
+  }
+  85% { 
+    transform: rotateY(1530deg) translateY(-5px); 
+    box-shadow: 0 5px 8px rgba(0,0,0,0.22);
+  }
+  92% { 
+    transform: rotateY(1710deg) translateY(-2px); 
+    box-shadow: 0 3px 5px rgba(0,0,0,0.25);
+  }
+  100% { 
+    transform: rotateY(1800deg) translateY(0); 
+    box-shadow: 0 5px 10px rgba(0,0,0,0.2);
+  }
 }
 
 @keyframes spin {
   0% { transform: rotate(0deg); }
+  20% { transform: rotate(800deg); }
+  40% { transform: rotate(1600deg); }
+  60% { transform: rotate(2200deg); }
+  80% { transform: rotate(2800deg); }
+  95% { transform: rotate(3500deg); }
   100% { transform: rotate(3600deg); }
 }
 
@@ -320,17 +351,44 @@ const styles = `
 }
 
 .coin-animation {
-  animation: flip 2s ease-out;
+  animation: flip 2s cubic-bezier(0.215, 0.610, 0.355, 1.000);
+  transform-style: preserve-3d;
+  perspective: 1200px;
+  backface-visibility: visible;
 }
 
 .spinner-animation {
-  animation: spin 3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  animation: spin 4s cubic-bezier(0.2, 0.8, 0.0, 0.95);
+  transform-origin: center;
+  will-change: transform;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
 .dice-bounce-animation {
   animation: bounce 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) 6;
   transform-style: preserve-3d;
   perspective: 1000px;
+}
+
+@keyframes winner-reveal {
+  0% { opacity: 0; transform: scale(0.5); }
+  50% { opacity: 1; transform: scale(1.1); }
+  75% { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+
+@keyframes trophy-shine {
+  0% { transform: scale(1) rotate(0deg); filter: brightness(1); }
+  50% { transform: scale(1.2) rotate(5deg); filter: brightness(1.5) drop-shadow(0 0 5px gold); }
+  100% { transform: scale(1) rotate(0deg); filter: brightness(1); }
+}
+
+.winner-animation {
+  animation: winner-reveal 0.6s ease-out forwards;
+}
+
+.trophy-animation {
+  animation: trophy-shine 1.2s ease-in-out infinite;
 }
 `;
 
