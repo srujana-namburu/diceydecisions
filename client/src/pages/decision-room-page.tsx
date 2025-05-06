@@ -165,15 +165,7 @@ export default function DecisionRoomPage() {
     return () => clearInterval(timer);
   }, [status, room?.id, room?.ownerId, user?.id]);
   
-  // Check for ties when voting is complete
-  useEffect(() => {
-    if (status === "results" && tiedOptions.length > 1) {
-      setIsTie(true);
-    } else {
-      setIsTie(false);
-      setShowTiebreaker(false);
-    }
-  }, [status, tiedOptions.length]);
+  // This function will be moved after tiedOptions is defined
 
   // Format remaining time as mm:ss
   const formatTime = (seconds: number) => {
@@ -241,16 +233,16 @@ export default function DecisionRoomPage() {
     { id: 3, name: "User 3", hasVoted: true },
   ];
 
+  // State for tiebreaker UI
+  const [isTie, setIsTie] = useState(false);
+  const [showTiebreaker, setShowTiebreaker] = useState(false);
+  const [tiebreakerMethod, setTiebreakerMethod] = useState<TiebreakerMethod>("dice");
+  
   // Mock vote results (in a real app, this would come from the API)
   const voteResults = options.map(option => ({
     option,
     votes: Math.floor(Math.random() * 5) // Random vote count for demo
   }));
-  
-  // Determine if there's a tie (for demo purposes)
-  const [isTie, setIsTie] = useState(false);
-  const [showTiebreaker, setShowTiebreaker] = useState(false);
-  const [tiebreakerMethod, setTiebreakerMethod] = useState<TiebreakerMethod>("dice");
   
   // Filter tied options based on vote count
   const tiedOptions = voteResults
@@ -259,6 +251,16 @@ export default function DecisionRoomPage() {
       id: result.option.id,
       text: result.option.text,
     }));
+    
+  // Check for ties when voting is complete
+  useEffect(() => {
+    if (status === "results" && tiedOptions.length > 1) {
+      setIsTie(true);
+    } else {
+      setIsTie(false);
+      setShowTiebreaker(false);
+    }
+  }, [status, tiedOptions.length]);
 
   if (roomLoading) {
     return (
