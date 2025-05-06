@@ -157,9 +157,9 @@ export function Tiebreaker({ options, onComplete, className }: TiebreakerProps) 
                 className="w-full h-full rounded-full border-4 border-neutral-200 relative transition-transform duration-3000 ease-out"
                 style={{ 
                   transform: `rotate(${spinnerRotation}deg)`,
-                  transitionDuration: isAnimating && countdown === 0 ? '3s' : '0s',
                   background: 'conic-gradient(from 0deg, #4f46e5 0%, #ec4899 33%, #f59e0b 66%, #4f46e5 100%)'
                 }}
+                className={isAnimating && countdown === 0 ? "spinner-animation" : ""}
               >
                 {/* Spinner segments */}
                 {options.map((option, index) => {
@@ -205,7 +205,7 @@ export function Tiebreaker({ options, onComplete, className }: TiebreakerProps) 
             <div 
               className={cn(
                 "w-24 h-24 rounded-full shadow-lg flex items-center justify-center text-xl font-bold mb-6",
-                isAnimating && countdown === 0 ? "animate-flip" : "",
+                isAnimating && countdown === 0 ? "coin-animation" : "",
                 coinValue === "heads" ? "bg-primary text-white" : "bg-secondary text-white"
               )}
             >

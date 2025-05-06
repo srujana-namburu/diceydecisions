@@ -85,50 +85,216 @@
 }
 
 @layer utilities {
+  /* Background patterns */
   .dice-bg {
     background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%236a0dad' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
   }
 
-  .btn-primary {
-    @apply transition-all duration-200;
+  /* Button animations */
+  .btn-primary, .btn-secondary, .btn-accent {
+    @apply transition-all duration-200 ease-out;
   }
   
-  .btn-primary:hover {
-    @apply transform -translate-y-0.5 shadow-lg;
+  .btn-primary:hover, .btn-secondary:hover, .btn-accent:hover {
+    @apply transform -translate-y-0.5 shadow-lg brightness-110;
   }
   
-  .btn-primary:active {
-    @apply transform translate-y-0;
+  .btn-primary:active, .btn-secondary:active, .btn-accent:active {
+    @apply transform translate-y-0 brightness-90 shadow-md;
   }
-  
+
+  /* Hover effects for cards */
+  .interactive-card {
+    @apply transition-all duration-300 ease-out border border-border/50 hover:border-primary/50 hover:shadow-md;
+  }
+
+  .interactive-card:hover {
+    @apply transform -translate-y-1;
+  }
+
+  /* Dice roll animation - 3D effect */
   .dice-animation {
-    animation: diceRoll 1.2s ease-in-out;
+    animation: diceRoll 2s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+    transform-style: preserve-3d;
+    backface-visibility: hidden;
+    perspective: 1000px;
   }
   
   @keyframes diceRoll {
-    0% { transform: rotate(0) translateY(0); }
-    25% { transform: rotate(90deg) translateY(-5px); }
-    50% { transform: rotate(180deg) translateY(0); }
-    75% { transform: rotate(270deg) translateY(-5px); }
-    100% { transform: rotate(360deg) translateY(0); }
+    0% { 
+      transform: rotate3d(1, 1, 1, 0deg) scale(0.5); 
+      opacity: 0.7;
+    }
+    20% { 
+      transform: rotate3d(1, 2, 1, 180deg) scale(0.8); 
+      opacity: 0.8;
+    }
+    40% { 
+      transform: rotate3d(2, 1, 3, 360deg) scale(1.1); 
+      opacity: 0.9;
+    }
+    70% { 
+      transform: rotate3d(3, 2, 1, 540deg) scale(1.1); 
+      opacity: 0.95;
+    }
+    90% { 
+      transform: rotate3d(1, 3, 2, 680deg) scale(1.05); 
+      opacity: 1;
+    }
+    100% { 
+      transform: rotate3d(1, 1, 1, 720deg) scale(1); 
+      opacity: 1;
+    }
   }
   
+  /* Spinner wheel animation */
+  .spinner-animation {
+    animation: spinWheel 3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+    transform-origin: center;
+  }
+  
+  @keyframes spinWheel {
+    0% { transform: rotate(0deg); }
+    30% { transform: rotate(1080deg); }
+    60% { transform: rotate(1440deg); }
+    80% { transform: rotate(1700deg); }
+    90% { transform: rotate(1750deg); }
+    95% { transform: rotate(1780deg); }
+    100% { transform: rotate(1800deg); }
+  }
+  
+  /* Coin flip animation */
+  .coin-animation {
+    animation: coinFlip 2.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    transform-style: preserve-3d;
+  }
+  
+  @keyframes coinFlip {
+    0% { transform: rotateY(0) translateY(0); }
+    10% { transform: rotateY(180deg) translateY(-30px); }
+    25% { transform: rotateY(360deg) translateY(-50px); }
+    40% { transform: rotateY(540deg) translateY(-30px); }
+    50% { transform: rotateY(720deg) translateY(0); }
+    60% { transform: rotateY(900deg) translateY(-15px); }
+    75% { transform: rotateY(1080deg) translateY(-25px); }
+    90% { transform: rotateY(1260deg) translateY(-10px); }
+    100% { transform: rotateY(1440deg) translateY(0); }
+  }
+  
+  /* Basic animations */
   .fade-in {
-    animation: fadeIn 0.5s ease-in;
+    animation: fadeIn 0.5s ease-in forwards;
   }
   
   @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  .fade-in-delay-1 {
+    animation: fadeIn 0.5s ease-in 0.1s forwards;
+    opacity: 0;
+  }
+  
+  .fade-in-delay-2 {
+    animation: fadeIn 0.5s ease-in 0.2s forwards;
+    opacity: 0;
+  }
+  
+  .fade-in-delay-3 {
+    animation: fadeIn 0.5s ease-in 0.3s forwards;
+    opacity: 0;
   }
   
   .pulse {
-    animation: pulse 2s infinite;
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
   
   @keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.05); }
-    100% { transform: scale(1); }
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.05); opacity: 0.8; }
+  }
+  
+  /* Loading animations */
+  .loading-dots:after {
+    content: '';
+    animation: loadingDots 1.5s infinite;
+  }
+  
+  @keyframes loadingDots {
+    0% { content: '.'; }
+    33% { content: '..'; }
+    66% { content: '...'; }
+    100% { content: ''; }
+  }
+  
+  .loading-spinner {
+    animation: loadingSpin 1s linear infinite;
+  }
+  
+  @keyframes loadingSpin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  /* Page transitions */
+  .page-transition-enter {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  
+  .page-transition-enter-active {
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 300ms, transform 300ms;
+  }
+  
+  .page-transition-exit {
+    opacity: 1;
+  }
+  
+  .page-transition-exit-active {
+    opacity: 0;
+    transition: opacity 300ms;
+  }
+  
+  /* Success animations */
+  .success-checkmark {
+    animation: checkmark 0.8s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+    transform: scale(0);
+    opacity: 0;
+  }
+  
+  @keyframes checkmark {
+    0% { transform: scale(0); opacity: 0; }
+    50% { transform: scale(1.2); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  
+  /* Shake animation for errors */
+  .shake {
+    animation: shake 0.82s cubic-bezier(.36,.07,.19,.97) both;
+  }
+  
+  @keyframes shake {
+    10%, 90% { transform: translate3d(-1px, 0, 0); }
+    20%, 80% { transform: translate3d(2px, 0, 0); }
+    30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+    40%, 60% { transform: translate3d(4px, 0, 0); }
+  }
+  
+  /* Focus states for accessibility */
+  .focus-ring:focus-visible {
+    @apply outline-none ring-2 ring-primary ring-offset-2;
+  }
+}
+
+/* Reduced motion preferences for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

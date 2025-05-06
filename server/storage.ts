@@ -468,21 +468,21 @@ export class DatabaseStorage implements IStorage {
       return [];
     }
     
-    // Use drizzle-orm's SQL builder for a safer query
-    const result = await db.execute<{ optionId: number, voteCount: number }>(sql`
-      SELECT 
-        o.id AS "optionId", 
-        COUNT(v.id) AS "voteCount"
-      FROM options o
-      LEFT JOIN votes v ON o.id = v."optionId"
-      WHERE o."roomId" = ${roomId}
-      GROUP BY o.id
-      ORDER BY "voteCount" DESC
-    `);
+    // Use a simpler approach with count aggregation
+    const results = await db.select({
+      optionId: options.id,
+      voteCount: sql<number>`count(${votes.id})`.mapWith(Number)
+    })
+    .from(options)
+    .leftJoin(votes, eq(options.id, votes.optionId))
+    .where(eq(options.roomId, roomId))
+    .groupBy(options.id)
+    .orderBy(desc(sql<number>`count(${votes.id})`));
     
-    return result.map(row => ({
-      optionId: Number(row.optionId),
-      voteCount: Number(row.voteCount)
+    // Type-safe mapping
+    return results.map((row: { optionId: number, voteCount: number }) => ({
+      optionId: row.optionId,
+      voteCount: row.voteCount
     }));
   }
 }

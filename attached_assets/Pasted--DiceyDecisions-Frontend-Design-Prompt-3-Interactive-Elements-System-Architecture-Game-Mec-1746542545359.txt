@@ -1,0 +1,100 @@
+# DiceyDecisions - Frontend Design Prompt 3: Interactive Elements & System Architecture
+
+## Game Mechanics Visualizations
+### Dice Roll Implementation
+- 3D rendered dice or high-quality 2D animation sequence
+- Multiple frames showing tumbling/rolling motion
+- Sound effects (optional but recommended)
+- Final result clearly displayed with number highlighted
+- Animation duration: 2-3 seconds (not too long to maintain engagement)
+- Ensure randomness is visually convincing
+
+### Spinner Mechanism
+- Colorful wheel divided into equal sections for each tied option
+- Text labels clearly visible on each section
+- Arrow/pointer indicator that remains static while wheel spins
+- Variable speed animation (fast start, gradually slowing)
+- Slight wobble at end for dramatic effect
+- Winner section highlighted with visual emphasis
+
+### Coin Flip Animation
+- Realistic 3D coin or stylized 2D animation
+- Clear heads/tails sides with distinct visuals
+- Flipping animation with proper physics
+- Landing animation with slight wobble
+- Result callout after landing
+- Ensure randomness appears fair and unbiased
+
+## State Management Requirements
+- User authentication state
+- Current room data:
+  * Room status (open/closed)
+  * Participant list
+  * Options list with votes (hidden until reveal)
+  * User's role (creator/participant)
+  * User's voting status
+- Visual indicators for all state changes
+- Loading states for async operations
+- Error handling with user-friendly messages
+- Success confirmations for key actions
+
+## Component Architecture Suggestions
+- Reusable UI components:
+  * Button variants (primary, secondary, danger)
+  * Form inputs with validation
+  * Cards for options display
+  * Modal dialogs for confirmations
+  * Toast notifications
+  * Game mechanics animations
+- Page/View components:
+  * Authentication pages
+  * Dashboard/Home
+  * Create Room
+  * Active Room
+  * Results View
+  * Past Decisions
+- Layout components:
+  * Navigation
+  * Page containers
+  * Responsive wrappers
+
+## Integration Points
+- Authentication service hooks
+- API endpoints for room operations
+- Local storage for recent rooms
+- Webhook or polling system for updates
+- Animation triggers based on state changes
+- Tiebreaker mechanism that receives random values from backend
+
+## System Behavior Requirements
+- Handle network interruptions gracefully
+- Persist state between page refreshes where appropriate
+- Clear feedback for all user actions
+- Timeouts for inactive rooms (30 min)
+- Automatic polling every 3-5 seconds for updates
+- Prevent duplicate votes or submissions
+- Creator-only controls properly secured in UI
+- Prevent access to results before voting
+
+## Motion Design Guidelines
+- Keep animations under 500ms for UI elements
+- Game animations (dice, spinner, coin) should be 2-3 seconds
+- Easing functions:
+  * UI elements: ease-in-out
+  * Game animations: custom physics-based easing
+- Reduced motion alternatives for accessibility
+- Consistent animation language throughout
+- Animations should enhance not hinder the experience
+
+## Dark Mode / Theme Support
+- Light and dark theme variants
+- Consistent color palette across themes
+- High contrast options for accessibility
+- Theme toggle in user settings
+
+## Implementation Notes
+- Prioritize mobile performance
+- Consider progressive enhancement
+- Keep animations performant (prefer CSS/SVG animations where possible)
+- Ensure all interactive elements have appropriate hover/focus/active states
+- Test with various screen readers and assistive technologies
