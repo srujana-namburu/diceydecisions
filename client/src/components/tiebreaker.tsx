@@ -289,7 +289,7 @@ export function Tiebreaker({ options, onComplete, className }: TiebreakerProps) 
             </ul>
             
             <Button 
-              className="w-full rounded-lg"
+              className="w-full rounded-lg action-button-pulse"
               onClick={startTiebreaker}
               disabled={method === "coin" && options.length !== 2}
             >
@@ -413,6 +413,22 @@ const styles = `
   transform-origin: center;
   color: #4f46e5;
   text-shadow: 0 0 10px rgba(79, 70, 229, 0.3);
+}
+
+.dice-glow {
+  box-shadow: 0 0 10px 2px rgba(79, 70, 229, 0.5), 0 0 20px 5px rgba(79, 70, 229, 0.2);
+  transition: box-shadow 0.3s ease;
+}
+
+@keyframes button-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.7); }
+  70% { box-shadow: 0 0 0 10px rgba(79, 70, 229, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0); }
+}
+
+.action-button-pulse {
+  animation: button-pulse 1.5s infinite;
+  position: relative;
 }
 `;
 

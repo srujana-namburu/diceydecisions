@@ -93,7 +93,7 @@ export function Dice({
         "relative rounded-lg bg-white shadow-md", 
         sizeClasses[size],
         colorClasses[color],
-        animated && "dice-bounce-animation",
+        animated && "dice-bounce-animation dice-glow",
         className
       )}
       {...props}
