@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { Tiebreaker, TiebreakerMethod } from "@/components/tiebreaker";
 import { 
   Users, 
   Clock, 
@@ -119,9 +120,10 @@ export default function DecisionRoomPage() {
 
   // Complete decision mutation (for room creator)
   const completeDecisionMutation = useMutation({
-    mutationFn: async (data: { roomId: number, tiebreaker?: string }) => {
+    mutationFn: async (data: { roomId: number, tiebreaker?: string, winningOptionId?: number }) => {
       const response = await apiRequest("POST", `/api/rooms/${data.roomId}/complete`, {
-        tiebreaker: data.tiebreaker
+        tiebreaker: data.tiebreaker,
+        winningOptionId: data.winningOptionId
       });
       return await response.json();
     },
@@ -162,6 +164,16 @@ export default function DecisionRoomPage() {
     
     return () => clearInterval(timer);
   }, [status, room?.id, room?.ownerId, user?.id]);
+  
+  // Check for ties when voting is complete
+  useEffect(() => {
+    if (status === "results" && tiedOptions.length > 1) {
+      setIsTie(true);
+    } else {
+      setIsTie(false);
+      setShowTiebreaker(false);
+    }
+  }, [status, tiedOptions.length]);
 
   // Format remaining time as mm:ss
   const formatTime = (seconds: number) => {
@@ -234,6 +246,19 @@ export default function DecisionRoomPage() {
     option,
     votes: Math.floor(Math.random() * 5) // Random vote count for demo
   }));
+  
+  // Determine if there's a tie (for demo purposes)
+  const [isTie, setIsTie] = useState(false);
+  const [showTiebreaker, setShowTiebreaker] = useState(false);
+  const [tiebreakerMethod, setTiebreakerMethod] = useState<TiebreakerMethod>("dice");
+  
+  // Filter tied options based on vote count
+  const tiedOptions = voteResults
+    .filter(result => result.votes === Math.max(...voteResults.map(r => r.votes)))
+    .map(result => ({
+      id: result.option.id,
+      text: result.option.text,
+    }));
 
   if (roomLoading) {
     return (
@@ -486,18 +511,58 @@ export default function DecisionRoomPage() {
                   </div>
                   
                   {status === "results" && isCreator && (
-                    <Button 
-                      className="w-full rounded-lg bg-accent text-white hover:bg-accent/90"
-                      onClick={handleCompleteDecision}
-                      disabled={completeDecisionMutation.isPending}
-                    >
-                      {completeDecisionMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <Check className="h-4 w-4 mr-2" />
+                    <>
+                      {/* Show tiebreaker if there are multiple options with the highest votes */}
+                      {tiedOptions.length > 1 && !showTiebreaker ? (
+                        <div className="text-center mb-6 p-4 bg-amber-50 rounded-lg border border-amber-200">
+                          <AlertCircle className="h-6 w-6 text-amber-500 mx-auto mb-2" />
+                          <h3 className="font-heading font-semibold text-lg mb-1">It's a tie!</h3>
+                          <p className="text-neutral-600 mb-4">
+                            {tiedOptions.length} options have received the same number of votes. Use a tiebreaker to determine the winner.
+                          </p>
+                          <Button 
+                            onClick={() => setShowTiebreaker(true)}
+                            className="bg-amber-500 text-white hover:bg-amber-600"
+                          >
+                            Use Tiebreaker
+                          </Button>
+                        </div>
+                      ) : null}
+                      
+                      {/* Tiebreaker component */}
+                      {showTiebreaker && tiedOptions.length > 1 ? (
+                        <Tiebreaker
+                          options={tiedOptions}
+                          onComplete={(winnerId) => {
+                            if (room?.id) {
+                              completeDecisionMutation.mutate({
+                                roomId: room.id,
+                                tiebreaker: "custom",
+                                winningOptionId: winnerId
+                              });
+                              setShowTiebreaker(false);
+                            }
+                          }}
+                          className="mb-6"
+                        />
+                      ) : null}
+                      
+                      {/* Only show the finalize button if there's no tie or tiebreaker is not shown */}
+                      {(tiedOptions.length <= 1 || !showTiebreaker) && (
+                        <Button 
+                          className="w-full rounded-lg bg-accent text-white hover:bg-accent/90"
+                          onClick={handleCompleteDecision}
+                          disabled={completeDecisionMutation.isPending}
+                        >
+                          {completeDecisionMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Check className="h-4 w-4 mr-2" />
+                          )}
+                          Finalize Decision
+                        </Button>
                       )}
-                      Finalize Decision
-                    </Button>
+                    </>
                   )}
                 </>
               )}

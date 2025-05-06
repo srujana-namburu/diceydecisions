@@ -2,10 +2,11 @@ import { useEffect } from "react";
 import { AppLayout } from "@/layouts/app-layout";
 import { RoomCodeDisplay } from "@/components/room-code-display";
 import { Card } from "@/components/ui/card";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, AlertCircle } from "lucide-react";
 import { useLocation, useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Room } from "@shared/schema";
+import { Button } from "@/components/ui/button";
 
 export default function RoomCreatedPage() {
   const { code } = useParams();
@@ -25,11 +26,41 @@ export default function RoomCreatedPage() {
   }, [code, setLocation]);
   
   const handleEnterRoom = () => {
-    // In a full implementation, we would redirect to the room
-    setLocation("/");
+    // Redirect to the actual room view
+    setLocation(`/room/${code}`);
   };
   
-  if (!code) return null;
+  const displayCode = code || "";
+  
+  // Handle missing code with a friendly error message
+  if (!code) {
+    return (
+      <AppLayout>
+        <Card className="p-6 md:p-8 text-center rounded-xl">
+          <div className="flex justify-center">
+            <div className="rounded-full bg-red-500 bg-opacity-20 p-3">
+              <AlertCircle className="h-8 w-8 text-red-500" />
+            </div>
+          </div>
+          
+          <h1 className="font-heading font-bold text-3xl text-neutral-800 mt-4">
+            Room Code Missing
+          </h1>
+          
+          <p className="text-neutral-600 mt-2 mb-6">
+            The room code is missing or invalid.
+          </p>
+          
+          <Button 
+            className="rounded-lg"
+            onClick={() => setLocation("/")}
+          >
+            Return to Dashboard
+          </Button>
+        </Card>
+      </AppLayout>
+    );
+  }
   
   return (
     <AppLayout>
@@ -49,7 +80,7 @@ export default function RoomCreatedPage() {
         </p>
         
         <RoomCodeDisplay 
-          code={code} 
+          code={displayCode} 
           onEnterRoom={handleEnterRoom}
         />
       </Card>
