@@ -71,15 +71,22 @@ export function setupAuth(app: Express) {
 
   app.post("/api/register", async (req, res, next) => {
     try {
-      const existingUser = await storage.getUserByUsername(req.body.username);
+      // Validate required fields
+      const { username, password, email, displayName } = req.body;
+      
+      if (!username || !password || !email || !displayName) {
+        return res.status(400).json({ message: "All fields are required" });
+      }
+      
+      const existingUser = await storage.getUserByUsername(username);
       if (existingUser) {
-        return res.status(400).send("Username already exists");
+        return res.status(400).json({ message: "Username already exists" });
       }
       
       // Check if email is already in use
-      const existingEmail = await storage.getUserByEmail(req.body.email);
+      const existingEmail = await storage.getUserByEmail(email);
       if (existingEmail) {
-        return res.status(400).send("Email already in use");
+        return res.status(400).json({ message: "Email already in use" });
       }
 
       const user = await storage.createUser({
@@ -92,7 +99,8 @@ export function setupAuth(app: Express) {
         res.status(201).json(user);
       });
     } catch (error) {
-      next(error);
+      console.error("Registration error:", error);
+      res.status(500).json({ message: "Registration failed. Please try again." });
     }
   });
 

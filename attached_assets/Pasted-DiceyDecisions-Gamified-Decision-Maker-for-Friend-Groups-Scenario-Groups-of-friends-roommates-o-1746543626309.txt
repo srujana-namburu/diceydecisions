@@ -1,0 +1,87 @@
+DiceyDecisions – Gamified Decision-Maker for Friend Groups
+Scenario:
+Groups of friends, roommates, or coworkers often waste time deciding simple things — "Where should we go out?", "Who’s doing dishes tonight?", "Which show should we binge?"
+
+DiceyDecisions solves this with gamified voting, randomness-based tiebreakers, and dramatic reveal mechanics. Users create decision rooms, submit options, vote secretly, and let dice, spinners, or coin flips break the tie when needed.
+
+You are tasked with building the MVP of this playful group decision tool.
+
+🎯 Objective:
+Build a secure, fullstack application where users can:
+
+Create decision rooms
+Invite friends (via room code or link)
+Submit and vote on options anonymously
+View live vote results
+Resolve ties using random game mechanics (dice, spinner, coin)
+Track past decisions with timestamps
+👥 User Role: user
+All users log in with an account. Auth is required to access or create decision rooms.
+
+🔐 Authentication & Authorization:
+Secure login/signup via email
+Users can:
+Only access rooms they’ve joined or created
+Only vote once per decision
+Only view results after voting is closed
+Room creators can:
+Close voting
+Trigger tiebreaker
+Delete room
+🧱 Core Functional Features:
+1. Create a Decision Room
+Form fields:
+Room Title (e.g., “Dinner Spot?”)
+Description (optional)
+Max participants (optional)
+Room creator receives:
+Room code
+Shareable invite link
+Room stored with:
+creatorId, createdAt, isOpen: true/false
+2. Join a Room
+Users can join via:
+Invite link
+Entering the room code manually
+On join:
+User is added to the room’s participant list
+They see all submitted options (but not votes)
+3. Submit Decision Options
+Every participant can submit 1 or more options:
+Text-based (e.g., “Dominos”, “Subway”, “Cook at home”)
+Each option is stored with:
+roomId, submittedBy, createdAt
+Editing allowed until voting opens
+4. Vote Anonymously
+Once creator opens voting:
+Options appear in randomized order
+Each participant votes once
+Votes are stored anonymously
+Users cannot see vote counts until voting ends
+5. Reveal Results + Handle Ties
+Once all votes are in or voting is closed manually:
+Results are revealed
+If there's a tie:
+Creator chooses a tiebreaker:
+🎲 Dice Roll
+🎡 Spinner
+🪙 Coin Flip
+Random winner is selected from tied options
+Animation plays out for chosen method before final result is shown
+6. Past Decisions View
+Shows list of rooms the user was part of
+Each room entry shows:
+Title
+Date/time resolved
+Final chosen option
+Tiebreaker used (if any)
+7. UI/UX Enhancements (Mandatory)
+Real-time feeling vote reveal (optional polling every 3–5 sec)
+Fun animations for dice roll, spinner, and coin flip
+Colorful, game-show-style decision screen
+Toasts for key state changes (e.g., “Voting closed!”, “It’s a tie!”)
+🧪 Additional Notes:
+Users can’t vote on their own option more than once
+Rooms should automatically close after 30 mins of inactivity (bonus logic)
+Spinners/dice should use fair randomness (can be mocked visually but truly random under the hood)
+You may mock the real-time effect without sockets (polling is acceptable)

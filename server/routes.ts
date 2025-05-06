@@ -9,6 +9,14 @@ import { insertRoomSchema, insertOptionSchema } from "@shared/schema";
 export async function registerRoutes(app: Express): Promise<Server> {
   // sets up /api/register, /api/login, /api/logout, /api/user
   setupAuth(app);
+  
+  // Custom error handling for auth errors
+  app.use((err: any, req: any, res: any, next: any) => {
+    if (err && err.status === 401) {
+      return res.status(401).json({ message: "Unauthorized. Please login." });
+    }
+    next(err);
+  });
 
   // Room Routes
   app.post("/api/rooms", async (req, res, next) => {

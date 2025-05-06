@@ -248,9 +248,10 @@ export function AuthForm() {
                   id="terms" 
                   {...registerForm.register("terms")}
                   className="mt-1"
+                  required
                 />
                 <Label htmlFor="terms" className="text-sm text-muted-foreground">
-                  I agree to the <a href="#" className="text-primary hover:underline">Terms of Service</a> and <a href="#" className="text-primary hover:underline">Privacy Policy</a>
+                  I agree to the <span className="text-primary hover:underline cursor-pointer">Terms of Service</span> and <span className="text-primary hover:underline cursor-pointer">Privacy Policy</span>
                 </Label>
               </div>
               {registerForm.formState.errors.terms && (
