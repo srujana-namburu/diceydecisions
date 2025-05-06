@@ -309,8 +309,14 @@ const styles = `
 }
 
 @keyframes bounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-20px); }
+  0% { transform: translateY(0) rotateX(0deg) rotateY(0deg); }
+  15% { transform: translateY(-30px) rotateX(180deg) rotateY(90deg); }
+  30% { transform: translateY(-15px) rotateX(90deg) rotateY(180deg); }
+  45% { transform: translateY(-45px) rotateX(270deg) rotateY(270deg); }
+  60% { transform: translateY(-20px) rotateX(180deg) rotateY(360deg); }
+  75% { transform: translateY(-30px) rotateX(360deg) rotateY(180deg); }
+  90% { transform: translateY(-10px) rotateX(270deg) rotateY(90deg); }
+  100% { transform: translateY(0) rotateX(360deg) rotateY(360deg); }
 }
 
 .coin-animation {
@@ -322,7 +328,9 @@ const styles = `
 }
 
 .dice-bounce-animation {
-  animation: bounce 0.3s ease-in-out 6;
+  animation: bounce 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) 6;
+  transform-style: preserve-3d;
+  perspective: 1000px;
 }
 `;
 
