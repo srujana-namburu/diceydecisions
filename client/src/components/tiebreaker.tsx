@@ -135,7 +135,7 @@ export function Tiebreaker({ options, onComplete, className }: TiebreakerProps) 
             <Dice 
               size="xl" 
               value={diceValue} 
-              animated={isAnimating && countdown === 0} 
+              animated={isAnimating && countdown === 0}
               className="mb-6"
             />
             {winner && (
@@ -154,12 +154,14 @@ export function Tiebreaker({ options, onComplete, className }: TiebreakerProps) 
             <div className="relative w-60 h-60 mb-4">
               {/* Spinner wheel */}
               <div 
-                className="w-full h-full rounded-full border-4 border-neutral-200 relative transition-transform duration-3000 ease-out"
+                className={cn(
+                  "w-full h-full rounded-full border-4 border-neutral-200 relative",
+                  isAnimating && countdown === 0 ? "spinner-animation" : ""
+                )}
                 style={{ 
                   transform: `rotate(${spinnerRotation}deg)`,
                   background: 'conic-gradient(from 0deg, #4f46e5 0%, #ec4899 33%, #f59e0b 66%, #4f46e5 100%)'
                 }}
-                className={isAnimating && countdown === 0 ? "spinner-animation" : ""}
               >
                 {/* Spinner segments */}
                 {options.map((option, index) => {
@@ -294,14 +296,33 @@ export function Tiebreaker({ options, onComplete, className }: TiebreakerProps) 
   );
 }
 
-// Add a special animation for the coin flip
+// Add animations for the tiebreaker components
 const styles = `
 @keyframes flip {
   0% { transform: rotateY(0); }
   100% { transform: rotateY(1800deg); }
 }
-.animate-flip {
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(3600deg); }
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-20px); }
+}
+
+.coin-animation {
   animation: flip 2s ease-out;
+}
+
+.spinner-animation {
+  animation: spin 3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.dice-bounce-animation {
+  animation: bounce 0.3s ease-in-out 6;
 }
 `;
 
