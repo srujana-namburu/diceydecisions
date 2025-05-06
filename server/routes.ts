@@ -30,6 +30,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...validatedData,
         code: roomCode,
         ownerId: req.user.id,
+        description: validatedData.description || null,
       });
       
       // Add the creator as a participant

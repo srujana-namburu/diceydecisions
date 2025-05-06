@@ -56,9 +56,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const registerMutation = useMutation({
-    mutationFn: async (userData: InsertUser) => {
-      const res = await apiRequest("POST", "/api/register", userData);
-      return await res.json();
+    mutationFn: async (userData: any) => {
+      try {
+        const res = await apiRequest("POST", "/api/register", userData);
+        return await res.json();
+      } catch (error: any) {
+        console.error("Registration error:", error);
+        throw new Error(error.message || "Registration failed. Please try again.");
+      }
     },
     onSuccess: (user: SelectUser) => {
       queryClient.setQueryData(["/api/user"], user);
@@ -71,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     onError: (error: Error) => {
       toast({
         title: "Registration failed",
-        description: error.message || "Could not create account",
+        description: error.message || "Could not create account. Please check your information and try again.",
         variant: "destructive",
       });
     },

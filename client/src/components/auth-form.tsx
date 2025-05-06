@@ -22,14 +22,14 @@ const loginSchema = z.object({
 });
 
 // Registration schema with validation
-const registrationSchema = insertUserSchema.extend({
+const registrationSchema = z.object({
   displayName: z.string().min(2, { message: "Display name must be at least 2 characters" }),
   email: z.string().email({ message: "Invalid email address" }),
   username: z.string().min(3, { message: "Username must be at least 3 characters" }),
   password: z.string().min(8, { message: "Password must be at least 8 characters" }),
   confirmPassword: z.string(),
-  terms: z.literal(true, {
-    errorMap: () => ({ message: "You must accept the terms and conditions" }),
+  terms: z.boolean().refine(val => val === true, {
+    message: "You must accept the terms and conditions",
   }),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
