@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 
 interface DecisionCardProps {
   id: number;
@@ -14,6 +15,7 @@ interface DecisionCardProps {
   participantCount: number;
   optionCount?: number;
   tiebreakerUsed?: string | null;
+  participants?: { id: number; username: string }[];
   onClick: () => void;
   buttonText: string;
 }
@@ -27,6 +29,7 @@ export function DecisionCard({
   participantCount,
   optionCount,
   tiebreakerUsed,
+  participants = [],
   onClick,
   buttonText,
 }: DecisionCardProps) {
@@ -76,10 +79,30 @@ export function DecisionCard({
       </CardContent>
       
       <CardFooter className="pt-0 flex justify-between items-center">
-        <div className="flex items-center">
-          <Users className="h-3 w-3 mr-1" />
-          <span className="text-xs text-neutral-500">{participantCount} participants</span>
-        </div>
+        <HoverCard>
+          <HoverCardTrigger asChild>
+            <div className="flex items-center cursor-help">
+              <Users className="h-3 w-3 mr-1" />
+              <span className="text-xs text-neutral-500">{participantCount} participants</span>
+            </div>
+          </HoverCardTrigger>
+          <HoverCardContent className="w-80">
+            <div className="space-y-2">
+              <h4 className="font-medium text-sm">Participants</h4>
+              {participants.length > 0 ? (
+                <ul className="text-sm space-y-1">
+                  {participants.map((participant) => (
+                    <li key={participant.id} className="text-neutral-600">
+                      {participant.username}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-neutral-500">No participants yet</p>
+              )}
+            </div>
+          </HoverCardContent>
+        </HoverCard>
         <Button 
           variant="link" 
           className="text-secondary p-0 h-auto"

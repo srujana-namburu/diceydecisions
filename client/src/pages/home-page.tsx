@@ -7,25 +7,78 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Dice } from "@/components/ui/dice";
-import { PlusCircle, Users, History } from "lucide-react";
+import { PlusCircle, Users, History, RefreshCw } from "lucide-react";
 import { useLocation } from "wouter";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 export default function HomePage() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [roomCode, setRoomCode] = useState("");
+  const [selectedTab, setSelectedTab] = useState<"active" | "past">("active");
   
   const { data: rooms = [], isLoading: isLoadingRooms } = useQuery<Room[]>({
     queryKey: ["/api/rooms"],
+    refetchInterval: 10000, // Refresh every 10 seconds to keep the list updated
   });
   
-  // Filter rooms into recent (in progress) and completed
-  const recentDecisions = rooms.filter(room => !room.isCompleted).slice(0, 3);
+  // Fetch detailed room data including participants
+  const { data: roomDetails = {}, isLoading: isLoadingDetails, refetch: refetchRoomDetails } = useQuery({
+    queryKey: ["/api/rooms/details"],
+    queryFn: async () => {
+      if (rooms.length === 0) return {};
+      
+      try {
+        const details = await Promise.all(
+          rooms.map(async (room) => {
+            try {
+              const response = await apiRequest("GET", `/api/rooms/${room.id}/details`);
+              if (!response.ok) {
+                console.error(`Failed to fetch details for room ${room.id}`);
+                return { id: room.id, participantCount: 0, optionCount: 0, participants: [] };
+              }
+              return await response.json();
+            } catch (error) {
+              console.error(`Error fetching details for room ${room.id}:`, error);
+              return { id: room.id, participantCount: 0, optionCount: 0, participants: [] };
+            }
+          })
+        );
+        
+        return details.reduce((acc, room) => {
+          if (room && room.id) {
+            acc[room.id] = room;
+          }
+          return acc;
+        }, {});
+      } catch (error) {
+        console.error("Error fetching room details:", error);
+        return {};
+      }
+    },
+    enabled: rooms.length > 0,
+    refetchInterval: 10000, // Refresh every 10 seconds
+  });
+  
+  // Filtering logic for active and past rooms
+  const now = Date.now();
+  const THIRTY_MINUTES = 30 * 60 * 1000;
+
+  const filteredRooms = rooms.filter(room => {
+    const isParticipant = room.ownerId === user?.id || (roomDetails[room.id]?.participants && roomDetails[room.id].participants.some((p: any) => p.id === user?.id));
+    const isExpired = now - new Date(room.createdAt).getTime() > THIRTY_MINUTES;
+    if (!isParticipant) return false;
+    if (selectedTab === "active") {
+      return !room.isCompleted && !isExpired;
+    } else {
+      return room.isCompleted || isExpired;
+    }
+  });
   
   // Join room mutation
   const joinRoomMutation = useMutation({
@@ -67,6 +120,31 @@ export default function HomePage() {
   
   return (
     <AppLayout>
+      {/* Toggle Buttons */}
+      <div className="flex justify-center mb-8">
+        <button
+          className={cn(
+            "px-6 py-2 rounded-l-lg font-semibold border border-primary/30",
+            selectedTab === "active"
+              ? "bg-primary text-white shadow"
+              : "bg-white text-primary hover:bg-primary/10"
+          )}
+          onClick={() => setSelectedTab("active")}
+        >
+          Decision Rooms
+        </button>
+        <button
+          className={cn(
+            "px-6 py-2 rounded-r-lg font-semibold border-t border-b border-r border-primary/30",
+            selectedTab === "past"
+              ? "bg-primary text-white shadow"
+              : "bg-white text-primary hover:bg-primary/10"
+          )}
+          onClick={() => setSelectedTab("past")}
+        >
+          Past Decision Rooms
+        </button>
+      </div>
       {/* Welcome Header */}
       <div className="mb-8">
         <h1 className="font-heading font-bold text-3xl md:text-4xl text-neutral-800">
@@ -136,42 +214,62 @@ export default function HomePage() {
         </Card>
       </div>
       
-      {/* Recent Decisions */}
-      {recentDecisions.length > 0 && (
+      {/* Decision Rooms List */}
+      {filteredRooms.length > 0 ? (
         <div className="mt-12">
-          <h2 className="font-heading font-bold text-2xl text-neutral-800 mb-4">Recent Decisions</h2>
+          <h2 className="font-heading font-bold text-2xl text-neutral-800 mb-4">
+            {selectedTab === "active" ? "Your Active Decisions" : "Your Past Decisions"}
+          </h2>
           <div className="grid gap-4 md:gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {recentDecisions.map((decision) => (
+            {filteredRooms.map((decision: Room) => (
               <DecisionCard
                 key={decision.id}
                 id={decision.id}
                 title={decision.title}
                 createdAt={decision.createdAt}
                 isCompleted={decision.isCompleted}
-                participantCount={3} // This would come from the API in a full implementation
-                optionCount={4} // This would come from the API in a full implementation
-                onClick={() => {/* Navigate to decision room */}}
-                buttonText="Continue"
+                participantCount={roomDetails[decision.id]?.participantCount || 0}
+                optionCount={roomDetails[decision.id]?.optionCount || 0}
+                participants={roomDetails[decision.id]?.participants || []}
+                onClick={() => setLocation(`/room/${decision.code}`)}
+                buttonText={selectedTab === "active" ? "Continue" : "View"}
               />
             ))}
           </div>
+          <div className="mt-4 text-center">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => {
+                queryClient.invalidateQueries({ queryKey: ["/api/rooms"] });
+                refetchRoomDetails();
+              }}
+              className="text-xs"
+            >
+              <RefreshCw className="h-3 w-3 mr-1" />
+              Refresh Decisions
+            </Button>
+          </div>
         </div>
-      )}
-      
-      {/* Empty state if no recent decisions */}
-      {recentDecisions.length === 0 && !isLoadingRooms && (
-        <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+      ) : (
+        <div className="flex flex-col items-center justify-center py-12 px-4 text-center mt-12">
           <Dice size="xl" className="mb-4 dice-animation" />
-          <h3 className="font-heading text-xl font-semibold mb-2">No active decisions yet</h3>
+          <h3 className="font-heading text-xl font-semibold mb-2">
+            {selectedTab === "active" ? "No active decisions yet" : "No past decisions yet"}
+          </h3>
           <p className="text-neutral-600 max-w-md mb-6">
-            Create your first decision room to start making group decisions the fun way!
+            {selectedTab === "active"
+              ? "Create your first decision room to start making group decisions the fun way!"
+              : "You have no past decision rooms. Once a decision is completed or expires, it will appear here."}
           </p>
-          <Button 
-            onClick={() => setLocation("/create-room")}
-            className="bg-primary text-white hover:bg-primary/90 rounded-lg btn-primary"
-          >
-            <PlusCircle className="mr-2 h-4 w-4" /> Create Your First Decision
-          </Button>
+          {selectedTab === "active" && (
+            <Button 
+              onClick={() => setLocation("/create-room")}
+              className="bg-primary text-white hover:bg-primary/90 rounded-lg btn-primary"
+            >
+              <PlusCircle className="mr-2 h-4 w-4" /> Create Your First Decision
+            </Button>
+          )}
         </div>
       )}
     </AppLayout>

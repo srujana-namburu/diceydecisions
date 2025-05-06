@@ -32,6 +32,7 @@ export interface IStorage {
   getRoomByCode(code: string): Promise<Room | undefined>;
   getRoomsByUserId(userId: number): Promise<Room[]>;
   completeRoom(id: number, winningOptionId: number, tiebreakerUsed: string | null): Promise<Room>;
+  deleteRoom(id: number): Promise<void>;
   
   // Option operations
   createOption(option: Omit<Option, "id" | "createdAt">): Promise<Option>;
@@ -50,6 +51,10 @@ export interface IStorage {
   
   // Session storage
   sessionStore: session.Store;
+
+  getParticipantsWithUsernames(roomId: number): Promise<{ id: number, username: string }[]>;
+
+  getRoomMembers(roomId: number): Promise<{ id: number, username: string, displayName: string, email: string }[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -168,6 +173,20 @@ export class MemStorage implements IStorage {
     return updatedRoom;
   }
 
+  async deleteRoom(id: number): Promise<void> {
+    this.roomsData.delete(id);
+    // Optionally, also delete related options, participants, and votes
+    for (const [oid, option] of Array.from(this.optionsData.entries())) {
+      if (option.roomId === id) this.optionsData.delete(oid);
+    }
+    for (const [pid, participant] of Array.from(this.participantsData.entries())) {
+      if (participant.roomId === id) this.participantsData.delete(pid);
+    }
+    for (const [vid, vote] of Array.from(this.votesData.entries())) {
+      if (vote.roomId === id) this.votesData.delete(vid);
+    }
+  }
+
   // Option operations
   async createOption(optionData: Omit<Option, "id" | "createdAt">): Promise<Option> {
     const id = this.currentIds.options++;
@@ -254,6 +273,29 @@ export class MemStorage implements IStorage {
     return Array.from(voteCounts.entries()).map(([optionId, voteCount]) => ({
       optionId,
       voteCount
+    }));
+  }
+
+  async getParticipantsWithUsernames(roomId: number): Promise<{ id: number, username: string }[]> {
+    const participants = Array.from(this.participantsData.values()).filter(p => p.roomId === roomId);
+    return participants.map(p => {
+      const user = this.usersData.get(p.userId);
+      return { id: p.userId, username: user?.username || "Unknown" };
+    });
+  }
+
+  async getRoomMembers(roomId: number): Promise<{ id: number, username: string, displayName: string, email: string }[]> {
+    const participantRows = await db.select().from(participants).where(eq(participants.roomId, roomId));
+    if (participantRows.length === 0) return [];
+    const userIds = participantRows.map(p => p.userId);
+    const userRows = userIds.length
+      ? await db.select().from(users).where(sql`${users.id} IN (${userIds.join(',')})`)
+      : [];
+    return userRows.map(u => ({
+      id: u.id,
+      username: u.username,
+      displayName: u.displayName,
+      email: u.email,
     }));
   }
 }
@@ -484,6 +526,42 @@ export class DatabaseStorage implements IStorage {
       optionId: row.optionId,
       voteCount: row.voteCount
     }));
+  }
+
+  async deleteRoom(id: number): Promise<void> {
+    await db.delete(rooms).where(eq(rooms.id, id));
+    await db.delete(options).where(eq(options.roomId, id));
+    await db.delete(participants).where(eq(participants.roomId, id));
+    await db.delete(votes).where(eq(votes.roomId, id));
+  }
+
+  async getParticipantsWithUsernames(roomId: number): Promise<{ id: number, username: string }[]> {
+    const participantRows = await db.select().from(participants).where(eq(participants.roomId, roomId));
+    if (participantRows.length === 0) return [];
+    const userIds = participantRows.map(p => p.userId);
+    // Use parameterized query for IN clause
+    const userRows = userIds.length
+      ? await db.select().from(users).where(sql`${users.id} IN (${userIds.join(',')})`)
+      : [];
+    return participantRows.map(p => {
+      const user = userRows.find(u => u.id === p.userId);
+      return { id: p.userId, username: user?.username || "Unknown" };
+    });
+  }
+
+  async getRoomMembers(roomId: number): Promise<{ id: number, username: string, displayName: string, email: string }[]> {
+    // Use an inner join to fetch all users who are participants in the room
+    const rows = await db
+      .select({
+        id: users.id,
+        username: users.username,
+        displayName: users.displayName,
+        email: users.email,
+      })
+      .from(participants)
+      .innerJoin(users, eq(participants.userId, users.id))
+      .where(eq(participants.roomId, roomId));
+    return rows;
   }
 }
 

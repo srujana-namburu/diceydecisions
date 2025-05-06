@@ -112,13 +112,13 @@ export function CreateRoomForm() {
       <div className="space-y-2">
         <Label htmlFor="maxParticipants">Maximum Participants (optional)</Label>
         <Select
-          onValueChange={(value) => form.setValue("maxParticipants", value ? parseInt(value) : undefined)}
+          onValueChange={(value) => form.setValue("maxParticipants", value === 'unlimited' ? undefined : parseInt(value))}
         >
           <SelectTrigger className="rounded-lg">
             <SelectValue placeholder="Unlimited" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Unlimited</SelectItem>
+            <SelectItem value="unlimited">Unlimited</SelectItem>
             <SelectItem value="2">2 participants</SelectItem>
             <SelectItem value="5">5 participants</SelectItem>
             <SelectItem value="10">10 participants</SelectItem>

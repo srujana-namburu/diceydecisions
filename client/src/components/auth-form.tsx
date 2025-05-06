@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { insertUserSchema } from "@shared/schema";
@@ -244,11 +244,18 @@ export function AuthForm() {
               </div>
               
               <div className="flex items-start gap-2 mt-4">
-                <Checkbox 
-                  id="terms" 
-                  {...registerForm.register("terms")}
-                  className="mt-1"
-                  required
+                <Controller
+                  name="terms"
+                  control={registerForm.control}
+                  render={({ field }) => (
+                    <Checkbox
+                      id="terms"
+                      checked={field.value}
+                      onCheckedChange={val => field.onChange(val === true)}
+                      className="mt-1"
+                      required
+                    />
+                  )}
                 />
                 <Label htmlFor="terms" className="text-sm text-muted-foreground">
                   I agree to the <span className="text-primary hover:underline cursor-pointer">Terms of Service</span> and <span className="text-primary hover:underline cursor-pointer">Privacy Policy</span>

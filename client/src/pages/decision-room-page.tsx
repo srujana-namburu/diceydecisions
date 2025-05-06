@@ -24,8 +24,17 @@ import {
   AlertCircle, 
   Loader2,
   BarChart2,
-  Trophy
+  Trophy,
+  RefreshCw
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 // Room status types
 type RoomStatus = "waiting" | "voting" | "results" | "completed";
@@ -38,7 +47,8 @@ export default function DecisionRoomPage() {
   const [newOption, setNewOption] = useState("");
   const [selectedOptionId, setSelectedOptionId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState("options");
-  const [remainingTime, setRemainingTime] = useState(300); // 5 minutes in seconds
+  const [showTiebreaker, setShowTiebreaker] = useState(false);
+  const [tiebreakerMethod, setTiebreakerMethod] = useState<TiebreakerMethod>("random");
 
   // Fetch room details
   const { data: room, isLoading: roomLoading } = useQuery<Room>({
@@ -51,6 +61,76 @@ export default function DecisionRoomPage() {
     queryKey: [`/api/rooms/${room?.id}/options`],
     enabled: !!room?.id,
   });
+
+  // Fetch members (users) of the room
+  const { data: members = [], isLoading: membersLoading, refetch: refetchMembers } = useQuery<{ id: number, username: string, displayName: string, email: string }[]>({
+    queryKey: [`/api/rooms/${room?.id}/members`],
+    enabled: !!room?.id,
+    onSuccess: (data: any) => {
+      console.log('Successfully fetched members:', data);
+    },
+    onError: (error: any) => {
+      console.error('Error fetching members:', error);
+      toast({
+        title: "Failed to load participants",
+        description: "Could not load the room participants. Please try refreshing the page.",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Ensure members is always an array
+  const safeMembers = Array.isArray(members) ? members : [];
+
+  // Debug function to check participants directly
+  const debugParticipants = async () => {
+    if (!room?.id) return;
+    
+    try {
+      const response = await fetch(`/api/debug/room/${room.id}/participants`);
+      const data = await response.json();
+      console.log('Debug participants data:', data);
+      toast({
+        title: "Debug Info",
+        description: `Room ${room.id} has ${data.participantCount} participants`,
+      });
+      
+      // Force refetch members
+      refetchMembers();
+    } catch (error) {
+      console.error('Error debugging participants:', error);
+    }
+  };
+
+  // Function to manually add the current user as a participant
+  const addSelfAsParticipant = async () => {
+    if (!room?.id || !user?.id) return;
+    
+    try {
+      const response = await apiRequest("POST", "/api/rooms/join", { code: room.code });
+      if (response.ok) {
+        toast({
+          title: "Joined room",
+          description: "You've been added as a participant",
+        });
+        refetchMembers();
+      } else {
+        const errorData = await response.json();
+        toast({
+          title: "Failed to join room",
+          description: errorData.message || "An error occurred",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error adding self as participant:', error);
+      toast({
+        title: "Error",
+        description: "Failed to join the room",
+        variant: "destructive",
+      });
+    }
+  };
 
   // Add option mutation
   const addOptionMutation = useMutation({
@@ -78,21 +158,59 @@ export default function DecisionRoomPage() {
     }
   });
 
-  // Vote mutation
+  // Handle adding a new option
+  const handleAddOption = () => {
+    if (!room?.id) return;
+    if (!newOption.trim()) {
+      toast({
+        title: "Option required",
+        description: "Please enter an option.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    addOptionMutation.mutate({
+      text: newOption.trim(),
+      roomId: room.id
+    });
+  };
+
+  // Vote mutation - simplified approach
   const voteMutation = useMutation({
     mutationFn: async (data: { roomId: number, optionId: number }) => {
-      const response = await apiRequest("POST", "/api/votes", data);
-      return await response.json();
+      console.log('Submitting vote with data:', data);
+      
+      // Use a simple form data approach
+      const formData = new FormData();
+      formData.append('roomId', data.roomId.toString());
+      formData.append('optionId', data.optionId.toString());
+      
+      const response = await fetch('/api/votes-simple', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `Error: ${response.status}`);
+      }
+      
+      return { success: true };
     },
     onSuccess: () => {
       toast({
         title: "Vote submitted",
         description: "Your vote has been recorded.",
       });
-      // In a real implementation, we would update the UI to show waiting for others
-      setStatus("results"); // For demo purposes, show results immediately
+      
+      // Update UI to show results
+      setActiveTab("results");
+      queryClient.invalidateQueries({ queryKey: [`/api/rooms/${room?.id}/results`] });
     },
-    onError: (error: Error) => {
+    onError: (error: any) => {
+      console.error('Vote mutation error:', error);
       toast({
         title: "Failed to submit vote",
         description: error.message || "An error occurred. Please try again.",
@@ -101,11 +219,29 @@ export default function DecisionRoomPage() {
     }
   });
 
+  // Handle vote submission
+  const handleVote = () => {
+    if (!room?.id || !selectedOptionId) {
+      toast({
+        title: "Selection required",
+        description: "Please select an option to vote.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    console.log(`Submitting vote for option ${selectedOptionId} in room ${room.id}`);
+    
+    voteMutation.mutate({
+      roomId: room.id,
+      optionId: selectedOptionId
+    });
+  };
+
   // Open voting mutation (for room creator)
   const openVotingMutation = useMutation({
     mutationFn: async (roomId: number) => {
-      // This would be a real API call in a full implementation
-      // For now, we'll just simulate it
+      // In a real implementation, this would be an API call to update room status
       await new Promise(resolve => setTimeout(resolve, 500));
       return { success: true };
     },
@@ -117,6 +253,49 @@ export default function DecisionRoomPage() {
       });
     }
   });
+
+  // Handle opening voting
+  const handleOpenVoting = () => {
+    if (!room?.id) return;
+    if (options.length < 2) {
+      toast({
+        title: "Not enough options",
+        description: "At least 2 options are required to start voting.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Open voting
+    openVotingMutation.mutate(room.id);
+  };
+  
+  // End voting mutation (for room creator)
+  const endVotingMutation = useMutation({
+    mutationFn: async (roomId: number) => {
+      // In a real implementation, this would be an API call to update room status
+      await new Promise(resolve => setTimeout(resolve, 500));
+      return { success: true };
+    },
+    onSuccess: () => {
+      setStatus("results");
+      setActiveTab("results");
+      toast({
+        title: "Voting ended",
+        description: "Voting has been closed. View the results.",
+      });
+      
+      // Refresh results
+      queryClient.invalidateQueries({ queryKey: [`/api/rooms/${room?.id}/results`] });
+    }
+  });
+  
+  // Handle ending voting
+  const handleEndVoting = () => {
+    if (!room?.id) return;
+    
+    endVotingMutation.mutate(room.id);
+  };
 
   // Complete decision mutation (for room creator)
   const completeDecisionMutation = useMutation({
@@ -144,123 +323,51 @@ export default function DecisionRoomPage() {
     }
   });
 
-  // Time countdown effect (for voting phase)
-  useEffect(() => {
-    if (status !== "voting") return;
-    
-    const timer = setInterval(() => {
-      setRemainingTime(prev => {
-        if (prev <= 0) {
-          clearInterval(timer);
-          // Auto-complete voting when time runs out
-          if (room?.id && room.ownerId === user?.id) {
-            completeDecisionMutation.mutate({ roomId: room.id });
-          }
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    
-    return () => clearInterval(timer);
-  }, [status, room?.id, room?.ownerId, user?.id]);
-  
-  // This function will be moved after tiedOptions is defined
-
-  // Format remaining time as mm:ss
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-  };
-
-  const handleAddOption = () => {
-    if (!room?.id) return;
-    if (!newOption.trim()) {
-      toast({
-        title: "Option required",
-        description: "Please enter an option.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    addOptionMutation.mutate({
-      text: newOption.trim(),
-      roomId: room.id
-    });
-  };
-
-  const handleOpenVoting = () => {
-    if (!room?.id) return;
-    if (options.length < 2) {
-      toast({
-        title: "Not enough options",
-        description: "At least 2 options are required to start voting.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    openVotingMutation.mutate(room.id);
-  };
-
-  const handleVote = () => {
-    if (!room?.id || !selectedOptionId) return;
-    
-    voteMutation.mutate({
-      roomId: room.id,
-      optionId: selectedOptionId
-    });
-  };
-
-  const handleCompleteDecision = () => {
-    if (!room?.id) return;
-    
-    completeDecisionMutation.mutate({
-      roomId: room.id,
-      tiebreaker: "random" // Default tiebreaker method
-    });
-  };
+  // State for tiebreaker UI
+  const [isTie, setIsTie] = useState(false);
 
   // Determine if current user is the room creator
   const isCreator = room?.ownerId === user?.id;
 
-  // Mock data for participants (in a real app, this would come from the API)
-  const participants = [
-    { id: 1, name: "User 1", hasVoted: true },
-    { id: 2, name: "User 2", hasVoted: false },
-    { id: 3, name: "User 3", hasVoted: true },
-  ];
+  // Fetch vote results
+  const { data: voteResults, isLoading: resultsLoading, refetch: refetchResults } = useQuery<{ optionId: number, voteCount: number }[]>({
+    queryKey: [`/api/rooms/${room?.id}/results`],
+    enabled: !!room?.id && (status === "results" || status === "completed" || room?.isCompleted),
+  });
 
-  // State for tiebreaker UI
-  const [isTie, setIsTie] = useState(false);
-  const [showTiebreaker, setShowTiebreaker] = useState(false);
-  const [tiebreakerMethod, setTiebreakerMethod] = useState<TiebreakerMethod>("dice");
-  
-  // Mock vote results (in a real app, this would come from the API)
-  const voteResults = options.map(option => ({
-    option,
-    votes: Math.floor(Math.random() * 5) // Random vote count for demo
-  }));
-  
-  // Filter tied options based on vote count
-  const tiedOptions = voteResults
-    .filter(result => result.votes === Math.max(...voteResults.map(r => r.votes)))
-    .map(result => ({
-      id: result.option.id,
-      text: result.option.text,
-    }));
-    
+  // Get total votes
+  const totalVotes = voteResults ? voteResults.reduce((sum, result) => sum + result.voteCount, 0) : 0;
+
+  // Calculate vote percentages and find the winning option
+  const votePercentages = voteResults?.map(result => {
+    return {
+      ...result,
+      percentage: totalVotes > 0 ? Math.round((result.voteCount / totalVotes) * 100) : 0
+    };
+  }).sort((a, b) => b.percentage - a.percentage);
+
+  // Determine if there's a tie for the winning option
+  const tiedOptions = voteResults?.length > 0 ? 
+    voteResults
+      .filter(result => result.voteCount === Math.max(...voteResults.map(r => r.voteCount)))
+      .map(result => {
+        const option = options.find(o => o.id === result.optionId);
+        return {
+          id: result.optionId,
+          text: option ? option.text : `Option ${result.optionId}`,
+          voteCount: result.voteCount
+        };
+      }) : [];
+
   // Check for ties when voting is complete
   useEffect(() => {
-    if (status === "results" && tiedOptions.length > 1) {
+    if (status === "results" && tiedOptions?.length > 1) {
       setIsTie(true);
     } else {
       setIsTie(false);
       setShowTiebreaker(false);
     }
-  }, [status, tiedOptions.length]);
+  }, [status, tiedOptions?.length]);
 
   if (roomLoading) {
     return (
@@ -316,15 +423,8 @@ export default function DecisionRoomPage() {
         <div className="flex flex-wrap gap-4">
           <div className="flex items-center text-sm text-neutral-600">
             <Users className="h-4 w-4 mr-1" />
-            <span>{participants.length} Participants</span>
+            <span>{safeMembers.length} Participants</span>
           </div>
-          
-          {status === "voting" && (
-            <div className="flex items-center text-sm text-neutral-600">
-              <Clock className="h-4 w-4 mr-1" />
-              <span>Time remaining: {formatTime(remainingTime)}</span>
-            </div>
-          )}
           
           {isCreator && status === "waiting" && (
             <div className="ml-auto">
@@ -347,10 +447,10 @@ export default function DecisionRoomPage() {
             <div className="ml-auto">
               <Button 
                 className="rounded-lg bg-accent text-white hover:bg-accent/90"
-                onClick={handleCompleteDecision}
-                disabled={completeDecisionMutation.isPending}
+                onClick={handleEndVoting}
+                disabled={endVotingMutation.isPending}
               >
-                {completeDecisionMutation.isPending ? (
+                {endVotingMutation.isPending ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
                   <Check className="h-4 w-4 mr-2" />
@@ -397,7 +497,7 @@ export default function DecisionRoomPage() {
                         <div className="flex justify-between items-center">
                           <p className="font-medium">{option.text}</p>
                           {isCreator && (
-                            <Badge variant="outline" className="text-xs">
+                            <Badge variant="outline" className="ml-2 text-xs">
                               Added by {option.createdById === user?.id ? "You" : "Participant"}
                             </Badge>
                           )}
@@ -441,132 +541,142 @@ export default function DecisionRoomPage() {
             <TabsContent value="voting" className="p-6">
               <h2 className="text-xl font-heading font-semibold mb-4">Cast Your Vote</h2>
               
-              <div className="space-y-3 mb-6">
-                {options.map((option) => (
-                  <Card 
-                    key={option.id} 
-                    className={`border border-neutral-200 cursor-pointer transition-all hover:shadow-md ${
-                      selectedOptionId === option.id ? "border-primary ring-2 ring-primary ring-opacity-30" : ""
-                    }`}
-                    onClick={() => setSelectedOptionId(option.id)}
+              {voteMutation.isError ? (
+                <div className="text-center py-8 border border-dashed border-destructive/20 rounded-lg bg-destructive/10 mb-6">
+                  <AlertCircle className="h-12 w-12 mx-auto mb-3 text-destructive" />
+                  <h3 className="font-medium text-lg mb-2">Vote Failed</h3>
+                  <p className="text-neutral-600 mb-4">
+                    {(voteMutation.error as Error)?.message || "Failed to submit your vote. Please try again."}
+                  </p>
+                  <Button 
+                    variant="outline" 
+                    className="rounded-lg"
+                    onClick={() => voteMutation.reset()}
                   >
-                    <CardContent className="p-4">
-                      <div className="flex justify-between items-center">
-                        <p className="font-medium">{option.text}</p>
-                        {selectedOptionId === option.id && (
-                          <Check className="text-primary h-5 w-5" />
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                    Try Again
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-3 mb-6">
+                    {options.map((option) => (
+                      <Card 
+                        key={option.id} 
+                        className={`border border-neutral-200 cursor-pointer transition-all hover:shadow-md ${
+                          selectedOptionId === option.id ? "border-primary ring-2 ring-primary ring-opacity-30" : ""
+                        }`}
+                        onClick={() => setSelectedOptionId(option.id)}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex justify-between items-center">
+                            <p className="font-medium">{option.text}</p>
+                            {selectedOptionId === option.id && (
+                              <Check className="text-primary h-5 w-5" />
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                  
+                  <Button 
+                    className="w-full rounded-lg bg-primary text-white hover:bg-primary/90"
+                    disabled={!selectedOptionId || voteMutation.isPending}
+                    onClick={handleVote}
+                  >
+                    {voteMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Submitting...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="h-4 w-4 mr-2" />
+                        Confirm Vote
+                      </>
+                    )}
+                  </Button>
+                </>
+              )}
               
-              <Button 
-                className="w-full rounded-lg bg-primary text-white hover:bg-primary/90"
-                disabled={!selectedOptionId || voteMutation.isPending}
-                onClick={handleVote}
-              >
-                {voteMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Check className="h-4 w-4 mr-2" />
-                )}
-                Confirm Vote
-              </Button>
+              <div className="text-xs text-neutral-500 text-center mt-4">
+                Note: You can only vote once per decision.
+              </div>
             </TabsContent>
             
             {/* Results Tab */}
             <TabsContent value="results" className="p-6">
-              <h2 className="text-xl font-heading font-semibold mb-4">Voting Results</h2>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-heading font-semibold">Results</h2>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => refetchResults()}
+                  disabled={resultsLoading}
+                >
+                  {resultsLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
+                  <span className="ml-1">Refresh</span>
+                </Button>
+              </div>
               
-              {(status === "results" || status === "completed") && (
-                <>
-                  <div className="space-y-4 mb-6">
-                    {voteResults.map((result, index) => {
-                      const isWinner = index === 0; // For demo, first option is winner
-                      const maxVotes = Math.max(...voteResults.map(r => r.votes));
-                      const percentage = maxVotes > 0 ? (result.votes / maxVotes) * 100 : 0;
-                      
-                      return (
-                        <div key={result.option.id} className="space-y-1">
-                          <div className="flex justify-between items-center">
-                            <div className="flex items-center">
-                              {isWinner && status === "completed" && (
-                                <Trophy className="h-5 w-5 text-yellow-500 mr-2" />
-                              )}
-                              <p className={`font-medium ${isWinner && status === "completed" ? "text-primary" : ""}`}>
-                                {result.option.text}
-                              </p>
-                            </div>
-                            <span className="text-neutral-700 font-medium">{result.votes} votes</span>
+              {resultsLoading ? (
+                <div className="flex justify-center items-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : votePercentages?.length === 0 ? (
+                <div className="text-center py-8 border border-dashed border-neutral-200 rounded-lg bg-neutral-50">
+                  <BarChart2 className="h-12 w-12 mx-auto mb-3 text-neutral-400" />
+                  <h3 className="font-medium text-lg mb-2">No votes yet</h3>
+                  <p className="text-neutral-600">
+                    Results will appear here once votes have been cast.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {votePercentages?.map(result => {
+                    const option = options.find(o => o.id === result.optionId);
+                    const isWinner = room?.winningOptionId === result.optionId;
+                    
+                    return (
+                      <div key={result.optionId} className="mb-4">
+                        <div className="flex justify-between items-center mb-1">
+                          <div className="flex items-center">
+                            <span className="font-medium">{option ? option.text : `Option ${result.optionId}`}</span>
+                            {isWinner && room?.isCompleted && (
+                              <Badge className="ml-2 bg-primary text-white">Winner</Badge>
+                            )}
                           </div>
+                          <span className="text-sm">{result.voteCount} vote{result.voteCount !== 1 ? 's' : ''} ({result.percentage}%)</span>
+                        </div>
+                        <div className="relative">
                           <div className={`relative h-2 w-full overflow-hidden rounded-full ${isWinner && status === "completed" ? "bg-primary-100" : "bg-neutral-100"}`}>
                             <div 
                               className={`h-full w-full flex-1 ${isWinner && status === "completed" ? "bg-primary" : "bg-secondary"} transition-all`}
-                              style={{ transform: `translateX(-${100 - percentage}%)` }}
+                              style={{ 
+                                transform: `translateX(-${100 - result.percentage}%)` 
+                              }}
                             />
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                      </div>
+                    );
+                  })}
                   
-                  {status === "results" && isCreator && (
-                    <>
-                      {/* Show tiebreaker if there are multiple options with the highest votes */}
-                      {tiedOptions.length > 1 && !showTiebreaker ? (
-                        <div className="text-center mb-6 p-4 bg-amber-50 rounded-lg border border-amber-200">
-                          <AlertCircle className="h-6 w-6 text-amber-500 mx-auto mb-2" />
-                          <h3 className="font-heading font-semibold text-lg mb-1">It's a tie!</h3>
-                          <p className="text-neutral-600 mb-4">
-                            {tiedOptions.length} options have received the same number of votes. Use a tiebreaker to determine the winner.
-                          </p>
-                          <Button 
-                            onClick={() => setShowTiebreaker(true)}
-                            className="bg-amber-500 text-white hover:bg-amber-600"
-                          >
-                            Use Tiebreaker
-                          </Button>
-                        </div>
-                      ) : null}
-                      
-                      {/* Tiebreaker component */}
-                      {showTiebreaker && tiedOptions.length > 1 ? (
-                        <Tiebreaker
-                          options={tiedOptions}
-                          onComplete={(winnerId) => {
-                            if (room?.id) {
-                              completeDecisionMutation.mutate({
-                                roomId: room.id,
-                                tiebreaker: "custom",
-                                winningOptionId: winnerId
-                              });
-                              setShowTiebreaker(false);
-                            }
-                          }}
-                          className="mb-6"
-                        />
-                      ) : null}
-                      
-                      {/* Only show the finalize button if there's no tie or tiebreaker is not shown */}
-                      {(tiedOptions.length <= 1 || !showTiebreaker) && (
-                        <Button 
-                          className="w-full rounded-lg bg-accent text-white hover:bg-accent/90"
-                          onClick={handleCompleteDecision}
-                          disabled={completeDecisionMutation.isPending}
-                        >
-                          {completeDecisionMutation.isPending ? (
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          ) : (
-                            <Check className="h-4 w-4 mr-2" />
-                          )}
-                          Finalize Decision
-                        </Button>
-                      )}
-                    </>
+                  {room?.isCompleted && room?.tiebreakerUsed && (
+                    <div className="mt-6 p-4 border border-dashed border-neutral-200 rounded-lg bg-neutral-50">
+                      <div className="flex items-center">
+                        <Dice className="h-5 w-5 mr-2 text-primary" />
+                        <span className="text-sm">
+                          Tiebreaker used: <span className="font-medium">{room.tiebreakerUsed}</span>
+                        </span>
+                      </div>
+                    </div>
                   )}
-                </>
+                </div>
               )}
             </TabsContent>
           </Tabs>
@@ -574,32 +684,65 @@ export default function DecisionRoomPage() {
         
         {/* Right Column - Participants */}
         <div className="bg-white rounded-xl shadow-md p-6">
-          <h2 className="text-xl font-heading font-semibold mb-4">Participants</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-heading font-semibold">Participants</h2>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="px-2 py-1">
+                {safeMembers.length}
+              </Badge>
+              {isCreator && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="text-xs" 
+                  onClick={debugParticipants}
+                >
+                  Debug
+                </Button>
+              )}
+            </div>
+          </div>
           
-          {participants.length === 0 ? (
-            <div className="text-center py-6">
+          {membersLoading ? (
+            <div className="flex justify-center items-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : members.length === 0 ? (
+            <div className="text-center py-8 border border-dashed border-neutral-200 rounded-lg bg-neutral-50">
+              <Users className="h-10 w-10 mx-auto mb-3 text-neutral-400" />
               <p className="text-neutral-600">No participants yet</p>
+              {isCreator && (
+                <Button 
+                  variant="link" 
+                  size="sm" 
+                  className="mt-2" 
+                  onClick={addSelfAsParticipant}
+                >
+                  Add yourself
+                </Button>
+              )}
             </div>
           ) : (
-            <div className="space-y-3">
-              {participants.map((participant) => (
-                <div key={participant.id} className="flex items-center justify-between p-2 border-b border-neutral-100 last:border-0">
+            <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+              {safeMembers.map((member) => (
+                <div key={member.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-neutral-50">
                   <div className="flex items-center">
                     <Avatar className="h-8 w-8 mr-3">
-                      <AvatarFallback className="bg-primary-50 text-primary">
-                        {participant.name.charAt(0)}
+                      <AvatarFallback className="bg-primary/10 text-primary">
+                        {(member as any).displayName ? (member as any).displayName.charAt(0).toUpperCase() : 
+                         (member as any).username ? (member as any).username.charAt(0).toUpperCase() : '?'}
                       </AvatarFallback>
                     </Avatar>
-                    <span className="text-sm">
-                      {participant.id === user?.id ? "You" : "Participant"}
-                    </span>
+                    <div>
+                      <span className="text-sm font-medium">
+                        {(member as any).id === user?.id ? "You" : ((member as any).displayName || (member as any).username || 'Unknown')}
+                      </span>
+                      {(member as any).id === room.ownerId && (
+                        <Badge variant="outline" className="ml-2 text-xs">Owner</Badge>
+                      )}
+                      <p className="text-xs text-neutral-500">@{(member as any).username}</p>
+                    </div>
                   </div>
-                  
-                  {status === "voting" && (
-                    <Badge variant={participant.hasVoted ? "outline" : "secondary"} className="text-xs">
-                      {participant.hasVoted ? "Voted" : "Not voted"}
-                    </Badge>
-                  )}
                 </div>
               ))}
             </div>
@@ -610,12 +753,14 @@ export default function DecisionRoomPage() {
               <h3 className="text-sm font-medium mb-2">Voting Progress</h3>
               <div className="relative h-2 w-full overflow-hidden rounded-full bg-neutral-100">
                 <div 
-                  className="h-full w-full flex-1 bg-secondary transition-all"
-                  style={{ transform: `translateX(-${100 - (participants.filter(p => p.hasVoted).length / participants.length) * 100}%)` }}
+                  className={`h-full w-full flex-1 bg-secondary transition-all`}
+                  style={{ 
+                    transform: `translateX(-${100 - (Math.min(1, safeMembers.length / (room.maxParticipants || 1)) * 100)}%)` 
+                  }}
                 />
               </div>
               <p className="text-xs text-neutral-500 mt-1 text-right">
-                {participants.filter(p => p.hasVoted).length} of {participants.length} voted
+                {safeMembers.length} {room.maxParticipants ? `of ${room.maxParticipants}` : ''} participants
               </p>
             </div>
           )}
@@ -623,6 +768,7 @@ export default function DecisionRoomPage() {
           <Button 
             variant="outline" 
             className="w-full mt-6 rounded-lg border-destructive text-destructive hover:bg-destructive/10"
+            onClick={() => window.location.href = '/'}
           >
             Leave Room
           </Button>

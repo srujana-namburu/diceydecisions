@@ -95,17 +95,35 @@ export function setupAuth(app: Express) {
       });
 
       req.login(user, (err) => {
-        if (err) return next(err);
+        if (err) {
+          console.error("Login after registration error:", err);
+          return next(err);
+        }
         res.status(201).json(user);
       });
-    } catch (error) {
-      console.error("Registration error:", error);
-      res.status(500).json({ message: "Registration failed. Please try again." });
+    } catch (error: any) {
+      console.error("Registration error:", error, error?.stack, req.body);
+      res.status(500).json({ message: "Registration failed. Please try again.", error: error && error.message, stack: error && error.stack });
     }
   });
 
-  app.post("/api/login", passport.authenticate("local"), (req, res) => {
-    res.status(200).json(req.user);
+  app.post("/api/login", (req, res, next) => {
+    passport.authenticate("local", (err: any, user: any, info: any) => {
+      if (err) {
+        console.error("Login error:", err, err && err.stack, req.body);
+        return res.status(500).json({ message: "Login failed. Please try again.", error: err && err.message, stack: err && err.stack });
+      }
+      if (!user) {
+        return res.status(401).json({ message: "Invalid username or password" });
+      }
+      req.login(user, (err: any) => {
+        if (err) {
+          console.error("Session login error:", err, err && err.stack, req.body);
+          return res.status(500).json({ message: "Login failed. Please try again.", error: err && err.message, stack: err && err.stack });
+        }
+        res.status(200).json(user);
+      });
+    })(req, res, next);
   });
 
   app.post("/api/logout", (req, res, next) => {
