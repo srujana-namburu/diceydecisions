@@ -1,0 +1,74 @@
+# DiceyDecisions - Frontend Design Prompt 1: Core UI/UX Framework
+
+## Brand & Style Direction
+Create a playful, game-show inspired interface with:
+- Vibrant color palette dominated by purples, blues, and energetic accent colors
+- Rounded corners, playful typography, and dice/game motifs throughout
+- Fun micro-animations for state changes, but keep them brief and non-distracting
+- Mobile-first responsive design that works well on all screen sizes
+
+## Authentication Screens
+### Login Screen
+- Clean, centered form with email and password fields
+- "Sign up" option prominently displayed for new users
+- Subtle dice animation in background that doesn't interfere with readability
+- Form validation with helpful error messages
+- "Forgot password" option below login button
+
+### Sign Up Screen
+- Email, password, confirm password, and display name fields
+- Password strength indicator
+- Terms of service checkbox
+- Clear success/error states
+- Animated transition to the dashboard upon successful signup
+
+## Dashboard / Home
+- Welcoming header with user's name
+- Large, prominent "Create New Decision" button/card
+- "Join a Decision" section with code entry field
+- Recent decisions section showing rooms user has participated in
+- Clean navigation for accessing profile settings
+
+## Decision Room Creation Flow
+### Create Room Form
+- Room title field (required)
+- Optional description field with character counter
+- Optional max participants selector
+- Toggle for "Allow participants to add options" (default: on)
+- Create button with subtle dice animation on hover
+
+### Room Created Success Screen
+- Large, copyable room code displayed prominently
+- One-click copy button for the code
+- Shareable link with copy button
+- QR code option for easy sharing
+- Clear "Enter Room" button to proceed
+- Option to directly invite friends via email (optional for MVP)
+
+## Past Decisions View
+- Card-based list view of past decisions
+- Each card shows:
+  * Room title
+  * Date/time resolved
+  * Winning option highlighted
+  * Indicator of tiebreaker used (if any)
+- Sorting options (newest first, alphabetical)
+- Empty state with friendly message for new users
+
+## Responsive Design Requirements
+- Fully functional on mobile devices (320px width minimum)
+- Tablet-optimized views
+- Desktop version with efficient use of additional screen space
+- Touch-friendly UI elements throughout
+
+## Accessibility Requirements
+- WCAG 2.1 AA compliant
+- Clear focus states for keyboard navigation
+- Screen reader friendly elements
+- Sufficient color contrast
+- Alternative text for all icons and visual elements
+
+## Technical Considerations
+- Design components that can easily integrate with frontend frameworks
+- Consider state management needs (loading, error, success states for all interactions)
+- Ensure animations are performant and can be disabled for users who prefer reduced motion
