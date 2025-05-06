@@ -3,7 +3,7 @@ import session from "express-session";
 import createMemoryStore from "memorystore";
 import connectPg from "connect-pg-simple";
 import { db, pool } from "./db";
-import { eq, and, sql, desc, asc } from "drizzle-orm";
+import { eq, and, sql, desc, asc, inArray } from "drizzle-orm";
 import { generateRoomCode } from "./utils";
 
 const MemoryStore = createMemoryStore(session);
@@ -378,7 +378,7 @@ export class DatabaseStorage implements IStorage {
         .from(rooms)
         .where(
           and(
-            sql`${rooms.id} IN (${participatedRoomIds.join(',')})`,
+            inArray(rooms.id, participatedRoomIds),
             sql`${rooms.ownerId} != ${userId}`
           )
         );
@@ -541,7 +541,7 @@ export class DatabaseStorage implements IStorage {
     const userIds = participantRows.map(p => p.userId);
     // Use parameterized query for IN clause
     const userRows = userIds.length
-      ? await db.select().from(users).where(sql`${users.id} IN (${userIds.join(',')})`)
+      ? await db.select().from(users).where(inArray(users.id, userIds))
       : [];
     return participantRows.map(p => {
       const user = userRows.find(u => u.id === p.userId);

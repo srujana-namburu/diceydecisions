@@ -439,30 +439,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) { next(error); }
   });
 
-  // Get room details with participants
-  app.get("/api/rooms/:roomId/details", async (req, res, next) => {
+  // Get room details including participants and options count
+  app.get("/api/rooms/:roomId/details", async (req, res) => {
     try {
-      if (!req.isAuthenticated()) return res.sendStatus(401);
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
       const roomId = parseInt(req.params.roomId);
-      if (isNaN(roomId)) return res.status(400).json({ message: "Invalid room ID" });
+      if (isNaN(roomId)) {
+        return res.status(400).json({ message: "Invalid room ID" });
+      }
       
+      console.log(`Fetching details for room ${roomId}`);
+      
+      // Get the room
       const room = await storage.getRoom(roomId);
-      if (!room) return res.status(404).json({ message: "Room not found" });
+      if (!room) {
+        return res.status(404).json({ message: "Room not found" });
+      }
       
-      // Get participants with usernames
-      const participants = await storage.getParticipantsWithUsernames(roomId);
-      
-      // Get options count
-      const options = await storage.getOptionsByRoomId(roomId);
-      
-      res.json({
-        ...room,
-        participants,
-        participantCount: participants.length,
-        optionCount: options.length
-      });
+      try {
+        // Get participants with usernames
+        const participants = await storage.getParticipantsWithUsernames(roomId);
+        
+        // Get options count
+        const options = await storage.getOptionsByRoomId(roomId);
+        
+        // Return combined data
+        return res.status(200).json({
+          id: room.id,
+          title: room.title,
+          code: room.code,
+          createdAt: room.createdAt,
+          ownerId: room.ownerId,
+          isCompleted: room.isCompleted,
+          participantCount: participants.length,
+          optionCount: options.length,
+          participants: participants
+        });
+      } catch (participantsError) {
+        console.error(`Error fetching participants for room ${roomId}:`, participantsError);
+        // Return room data without participants
+        return res.status(200).json({
+          id: room.id,
+          title: room.title,
+          code: room.code,
+          createdAt: room.createdAt,
+          ownerId: room.ownerId,
+          isCompleted: room.isCompleted,
+          participantCount: 0,
+          optionCount: 0,
+          participants: []
+        });
+      }
     } catch (error) {
-      next(error);
+      console.error(`Error fetching room details for room ${req.params.roomId}:`, error);
+      return res.status(500).json({ message: "Internal server error" });
     }
   });
 

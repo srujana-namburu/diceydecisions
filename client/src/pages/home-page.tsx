@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Dice } from "@/components/ui/dice";
-import { PlusCircle, Users, History, RefreshCw } from "lucide-react";
+import { PlusCircle, Users, History, RefreshCw, SearchX } from "lucide-react";
 import { useLocation } from "wouter";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
@@ -22,27 +22,47 @@ export default function HomePage() {
   const [roomCode, setRoomCode] = useState("");
   const [selectedTab, setSelectedTab] = useState<"active" | "past">("active");
   
-  const { data: rooms = [], isLoading: isLoadingRooms } = useQuery<Room[]>({
+  // Fetch rooms
+  const { data: rooms = [], isLoading: isLoadingRooms, refetch: refetchRooms } = useQuery<Room[]>({
     queryKey: ["/api/rooms"],
-    refetchInterval: 10000, // Refresh every 10 seconds to keep the list updated
+    queryFn: async () => {
+      try {
+        console.log("Fetching rooms...");
+        const response = await apiRequest("GET", "/api/rooms");
+        if (!response.ok) {
+          console.error("Failed to fetch rooms:", response.status);
+          return [];
+        }
+        const data = await response.json();
+        console.log("Successfully fetched rooms:", data);
+        return data;
+      } catch (error) {
+        console.error("Error fetching rooms:", error);
+        return [];
+      }
+    },
+    refetchInterval: 10000, // Refresh every 10 seconds
   });
   
   // Fetch detailed room data including participants
-  const { data: roomDetails = {}, isLoading: isLoadingDetails, refetch: refetchRoomDetails } = useQuery({
+  const { data: roomDetails = {}, isLoading: isLoadingDetails, refetch: refetchRoomDetails } = useQuery<Record<number, any>>({
     queryKey: ["/api/rooms/details"],
     queryFn: async () => {
       if (rooms.length === 0) return {};
       
       try {
         const details = await Promise.all(
-          rooms.map(async (room) => {
+          rooms.map(async (room: Room) => {
             try {
+              console.log(`Fetching details for room ${room.id}`);
               const response = await apiRequest("GET", `/api/rooms/${room.id}/details`);
               if (!response.ok) {
-                console.error(`Failed to fetch details for room ${room.id}`);
+                console.error(`Failed to fetch details for room ${room.id}: ${response.status}`);
                 return { id: room.id, participantCount: 0, optionCount: 0, participants: [] };
               }
-              return await response.json();
+              const data = await response.json();
+              console.log(`Successfully fetched details for room ${room.id}:`, data);
+              return data;
             } catch (error) {
               console.error(`Error fetching details for room ${room.id}:`, error);
               return { id: room.id, participantCount: 0, optionCount: 0, participants: [] };
@@ -50,7 +70,7 @@ export default function HomePage() {
           })
         );
         
-        return details.reduce((acc, room) => {
+        return details.reduce((acc: Record<number, any>, room: any) => {
           if (room && room.id) {
             acc[room.id] = room;
           }
@@ -69,16 +89,25 @@ export default function HomePage() {
   const now = Date.now();
   const THIRTY_MINUTES = 30 * 60 * 1000;
 
-  const filteredRooms = rooms.filter(room => {
-    const isParticipant = room.ownerId === user?.id || (roomDetails[room.id]?.participants && roomDetails[room.id].participants.some((p: any) => p.id === user?.id));
+  // Simplified filtering logic to ensure rooms are displayed
+  const filteredRooms = rooms.filter((room: Room) => {
+    console.log(`Filtering room ${room.id}: ${room.title}, isCompleted=${room.isCompleted}`);
+    
+    // Filter based on the selected tab
     const isExpired = now - new Date(room.createdAt).getTime() > THIRTY_MINUTES;
-    if (!isParticipant) return false;
+    
     if (selectedTab === "active") {
       return !room.isCompleted && !isExpired;
     } else {
       return room.isCompleted || isExpired;
     }
   });
+  
+  // Debug logs
+  console.log("[DEBUG] user:", user);
+  console.log("[DEBUG] rooms:", rooms);
+  console.log("[DEBUG] roomDetails:", roomDetails);
+  console.log("[DEBUG] filteredRooms:", filteredRooms);
   
   // Join room mutation
   const joinRoomMutation = useMutation({
@@ -215,11 +244,30 @@ export default function HomePage() {
       </div>
       
       {/* Decision Rooms List */}
-      {filteredRooms.length > 0 ? (
-        <div className="mt-12">
-          <h2 className="font-heading font-bold text-2xl text-neutral-800 mb-4">
-            {selectedTab === "active" ? "Your Active Decisions" : "Your Past Decisions"}
-          </h2>
+      <div className="mt-12">
+        <h2 className="font-heading font-bold text-2xl text-neutral-800 mb-4">
+          {selectedTab === "active" ? "Your Active Decisions" : "Your Past Decisions"}
+        </h2>
+        
+        {isLoadingRooms ? (
+          <div className="flex justify-center items-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+          </div>
+        ) : rooms.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="mb-4">
+              <div className="mx-auto w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+                <SearchX className="h-8 w-8 text-muted-foreground" />
+              </div>
+            </div>
+            <h3 className="font-medium text-lg mb-2">No decisions found</h3>
+            <p className="text-muted-foreground mb-6">
+              {selectedTab === "active"
+                ? "You don't have any active decisions. Create a new one to get started!"
+                : "You don't have any past decisions. Completed decisions will appear here."}
+            </p>
+          </div>
+        ) : (
           <div className="grid gap-4 md:gap-6 md:grid-cols-2 lg:grid-cols-3">
             {filteredRooms.map((decision: Room) => (
               <DecisionCard
@@ -236,42 +284,23 @@ export default function HomePage() {
               />
             ))}
           </div>
-          <div className="mt-4 text-center">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => {
-                queryClient.invalidateQueries({ queryKey: ["/api/rooms"] });
-                refetchRoomDetails();
-              }}
-              className="text-xs"
-            >
-              <RefreshCw className="h-3 w-3 mr-1" />
-              Refresh Decisions
-            </Button>
-          </div>
+        )}
+        
+        <div className="mt-4 text-center">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => {
+              queryClient.invalidateQueries({ queryKey: ["/api/rooms"] });
+              refetchRoomDetails();
+            }}
+            className="text-xs"
+          >
+            <RefreshCw className="h-3 w-3 mr-1" />
+            Refresh Decisions
+          </Button>
         </div>
-      ) : (
-        <div className="flex flex-col items-center justify-center py-12 px-4 text-center mt-12">
-          <Dice size="xl" className="mb-4 dice-animation" />
-          <h3 className="font-heading text-xl font-semibold mb-2">
-            {selectedTab === "active" ? "No active decisions yet" : "No past decisions yet"}
-          </h3>
-          <p className="text-neutral-600 max-w-md mb-6">
-            {selectedTab === "active"
-              ? "Create your first decision room to start making group decisions the fun way!"
-              : "You have no past decision rooms. Once a decision is completed or expires, it will appear here."}
-          </p>
-          {selectedTab === "active" && (
-            <Button 
-              onClick={() => setLocation("/create-room")}
-              className="bg-primary text-white hover:bg-primary/90 rounded-lg btn-primary"
-            >
-              <PlusCircle className="mr-2 h-4 w-4" /> Create Your First Decision
-            </Button>
-          )}
-        </div>
-      )}
+      </div>
     </AppLayout>
   );
 }

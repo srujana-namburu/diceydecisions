@@ -39,6 +39,11 @@ import {
 // Room status types
 type RoomStatus = "waiting" | "voting" | "results" | "completed";
 
+type VoteResult = {
+  userId: number;
+  optionId: number;
+};
+
 export default function DecisionRoomPage() {
   const { code } = useParams();
   const { user } = useAuth();
@@ -329,27 +334,55 @@ export default function DecisionRoomPage() {
   // Determine if current user is the room creator
   const isCreator = room?.ownerId === user?.id;
 
-  // Fetch vote results
-  const { data: voteResults, isLoading: resultsLoading, refetch: refetchResults } = useQuery<{ optionId: number, voteCount: number }[]>({
+  // Fetch vote results for the room
+  const { data: voteResults = [], isLoading: voteResultsLoading, refetch: refetchResults } = useQuery<VoteResult[]>({
     queryKey: [`/api/rooms/${room?.id}/results`],
+    queryFn: async () => {
+      try {
+        const response = await apiRequest("GET", `/api/rooms/${room?.id}/results`);
+        if (!response.ok) {
+          throw new Error("Failed to fetch vote results");
+        }
+        const data = await response.json();
+        return data;
+      } catch (error) {
+        console.error("Error fetching vote results:", error);
+        return [];
+      }
+    },
     enabled: !!room?.id && (status === "results" || status === "completed" || room?.isCompleted),
   });
 
+  // Process vote results to get counts per option
+  const voteCountsByOption = Array.isArray(voteResults) ? 
+    voteResults.reduce((counts: Record<number, number>, vote) => {
+      counts[vote.optionId] = (counts[vote.optionId] || 0) + 1;
+      return counts;
+    }, {}) : {};
+
+  // Check if user has voted
+  const hasVoted = Array.isArray(voteResults) && voteResults.some(vote => vote.userId === user?.id);
+
   // Get total votes
-  const totalVotes = voteResults ? voteResults.reduce((sum, result) => sum + result.voteCount, 0) : 0;
+  const totalVotes = Array.isArray(voteResults) ? voteResults.length : 0;
 
   // Calculate vote percentages and find the winning option
-  const votePercentages = voteResults?.map(result => {
-    return {
-      ...result,
-      percentage: totalVotes > 0 ? Math.round((result.voteCount / totalVotes) * 100) : 0
-    };
-  }).sort((a, b) => b.percentage - a.percentage);
+  const votePercentages = Array.isArray(voteResults) ? 
+    Object.entries(voteCountsByOption).map(([optionId, count]) => {
+      return {
+        optionId: parseInt(optionId),
+        voteCount: count,
+        percentage: totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0
+      };
+    }).sort((a, b) => b.percentage - a.percentage) : [];
 
   // Determine if there's a tie for the winning option
-  const tiedOptions = voteResults?.length > 0 ? 
-    voteResults
-      .filter(result => result.voteCount === Math.max(...voteResults.map(r => r.voteCount)))
+  const highestVoteCount = votePercentages.length > 0 ? votePercentages[0].voteCount : 0;
+  
+  // Find all options with the highest vote count
+  const tiedOptions = votePercentages.length > 0 ? 
+    votePercentages
+      .filter(result => result.voteCount === highestVoteCount)
       .map(result => {
         const option = options.find(o => o.id === result.optionId);
         return {
@@ -361,13 +394,13 @@ export default function DecisionRoomPage() {
 
   // Check for ties when voting is complete
   useEffect(() => {
-    if (status === "results" && tiedOptions?.length > 1) {
+    if (status === "results" && Array.isArray(tiedOptions) && tiedOptions.length > 1) {
       setIsTie(true);
     } else {
       setIsTie(false);
       setShowTiebreaker(false);
     }
-  }, [status, tiedOptions?.length]);
+  }, [status, tiedOptions]);
 
   if (roomLoading) {
     return (
@@ -481,7 +514,7 @@ export default function DecisionRoomPage() {
             <TabsContent value="options" className="p-6">
               <h2 className="text-xl font-heading font-semibold mb-4">Decision Options</h2>
               
-              {options.length === 0 ? (
+              {Array.isArray(options) && options.length === 0 ? (
                 <div className="text-center py-8 border border-dashed border-neutral-200 rounded-lg bg-neutral-50">
                   <Dice size="lg" className="mx-auto mb-4" />
                   <h3 className="font-medium text-lg mb-2">No options yet</h3>
@@ -612,9 +645,9 @@ export default function DecisionRoomPage() {
                   variant="ghost" 
                   size="sm" 
                   onClick={() => refetchResults()}
-                  disabled={resultsLoading}
+                  disabled={voteResultsLoading}
                 >
-                  {resultsLoading ? (
+                  {voteResultsLoading ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <RefreshCw className="h-4 w-4" />
@@ -623,11 +656,11 @@ export default function DecisionRoomPage() {
                 </Button>
               </div>
               
-              {resultsLoading ? (
+              {voteResultsLoading ? (
                 <div className="flex justify-center items-center py-12">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
-              ) : votePercentages?.length === 0 ? (
+              ) : Array.isArray(votePercentages) && votePercentages.length === 0 ? (
                 <div className="text-center py-8 border border-dashed border-neutral-200 rounded-lg bg-neutral-50">
                   <BarChart2 className="h-12 w-12 mx-auto mb-3 text-neutral-400" />
                   <h3 className="font-medium text-lg mb-2">No votes yet</h3>
@@ -637,7 +670,7 @@ export default function DecisionRoomPage() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {votePercentages?.map(result => {
+                  {votePercentages.map(result => {
                     const option = options.find(o => o.id === result.optionId);
                     const isWinner = room?.winningOptionId === result.optionId;
                     
@@ -666,7 +699,7 @@ export default function DecisionRoomPage() {
                     );
                   })}
                   
-                  {room?.isCompleted && room?.tiebreakerUsed && (
+                  {room && room.isCompleted && room.tiebreakerUsed && (
                     <div className="mt-6 p-4 border border-dashed border-neutral-200 rounded-lg bg-neutral-50">
                       <div className="flex items-center">
                         <Dice className="h-5 w-5 mr-2 text-primary" />
