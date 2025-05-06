@@ -19,6 +19,16 @@ interface TiebreakerProps {
 }
 
 export function Tiebreaker({ options, onComplete, className }: TiebreakerProps) {
+  // Helper component for winner display
+  const WinnerDisplay = ({ winner }: { winner: TiebreakerOption }) => (
+    <div className="mt-4 text-center winner-animation">
+      <Trophy className="h-8 w-8 text-yellow-500 mx-auto mb-2 trophy-animation" />
+      <div className="winner-text-container">
+        <p className="text-lg font-bold text-primary">{winner.text}</p>
+        <p className="text-sm text-neutral-600 mt-1">is the winner!</p>
+      </div>
+    </div>
+  );
   const [method, setMethod] = useState<TiebreakerMethod>("dice");
   const [isAnimating, setIsAnimating] = useState(false);
   const [countdown, setCountdown] = useState(3);
@@ -122,8 +132,8 @@ export function Tiebreaker({ options, onComplete, className }: TiebreakerProps) 
     if (countdown > 0) {
       return (
         <div className="flex flex-col items-center justify-center p-10">
-          <div className="text-5xl font-bold text-primary mb-4">{countdown}</div>
-          <p className="text-neutral-600">Get ready...</p>
+          <div className="text-6xl font-bold text-primary mb-4 countdown-animation">{countdown}</div>
+          <p className="text-neutral-600 animate-pulse">Get ready...</p>
         </div>
       );
     }
@@ -389,6 +399,20 @@ const styles = `
 
 .trophy-animation {
   animation: trophy-shine 1.2s ease-in-out infinite;
+}
+
+@keyframes countdown {
+  0% { transform: scale(1.5); opacity: 0; }
+  20% { transform: scale(1.2); opacity: 1; }
+  80% { transform: scale(0.9); opacity: 1; }
+  100% { transform: scale(0.8); opacity: 0; }
+}
+
+.countdown-animation {
+  animation: countdown 1s ease-in-out;
+  transform-origin: center;
+  color: #4f46e5;
+  text-shadow: 0 0 10px rgba(79, 70, 229, 0.3);
 }
 `;
 
