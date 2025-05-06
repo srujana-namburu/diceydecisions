@@ -9,6 +9,7 @@ import AuthPage from "@/pages/auth-page";
 import CreateRoomPage from "@/pages/create-room-page";
 import RoomCreatedPage from "@/pages/room-created-page";
 import PastDecisionsPage from "@/pages/past-decisions-page";
+import DecisionRoomPage from "@/pages/decision-room-page";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "./lib/protected-route";
 
@@ -19,6 +20,7 @@ function Router() {
       <Route path="/auth" component={AuthPage} />
       <ProtectedRoute path="/create-room" component={CreateRoomPage} />
       <ProtectedRoute path="/room-created/:code" component={RoomCreatedPage} />
+      <ProtectedRoute path="/room/:code" component={DecisionRoomPage} />
       <ProtectedRoute path="/past-decisions" component={PastDecisionsPage} />
       <Route component={NotFound} />
     </Switch>

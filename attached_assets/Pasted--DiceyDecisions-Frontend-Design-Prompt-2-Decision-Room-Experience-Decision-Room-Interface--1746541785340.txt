@@ -1,0 +1,71 @@
+# DiceyDecisions - Frontend Design Prompt 2: Decision Room Experience
+
+## Decision Room Interface
+### Room Entry View
+- Header with room title and description
+- Room status indicator (waiting for options, voting open, results available)
+- List of participants with anonymous avatars (no names for privacy)
+- Creator-only controls clearly separated from participant controls
+- Countdown timer when voting is active
+- Clear "Leave Room" option that confirms before exiting
+
+### Options Submission Phase
+- Clear instructions for submitting options
+- Text input field with character limit (~50 chars)
+- "Add Option" button with micro-animation feedback
+- List view of submitted options (show submitter name only to the creator)
+- Option to edit/delete your own submitted options before voting begins
+- For creator: prominent "Open Voting" button when at least 2 options exist
+- Visual indication of maximum options per user (if limited)
+- Empty state with friendly prompt to add the first option
+
+### Voting Interface
+- Options displayed in randomized order as cards
+- Clear visual indication of selection state
+- Single-selection mechanism enforced
+- Vote confirmation button with playful animation
+- Post-vote screen showing "Waiting for others..." with animated elements
+- If creator: options to close voting early or set time limit
+- Progress indicator showing how many participants have voted
+
+## Results & Tiebreaker Experience
+### Results Reveal
+- Dramatic "revealing results" animation that builds anticipation
+- Bar chart visualization of votes for each option
+- Highlight for the winning option with celebratory animation
+- In case of tie: "It's a tie!" announcement with dramatic effect
+
+### Tiebreaker Mechanism (Creator Controls)
+- Tiebreaker selection interface with 3 options:
+  * Dice Roll: 3D dice with physics-based animation
+  * Spinner: Wheel of fortune style with decreasing speed
+  * Coin Flip: 3D coin with realistic physics
+- Start tiebreaker button with countdown animation
+- Tied options clearly displayed before tiebreaker begins
+
+### Tiebreaker Animation Sequences
+- Dice: 3D dice tumbling with sound effects, landing on number
+- Spinner: Colorful wheel with tied options, slowing to stop on winner
+- Coin: Flipping coin animation showing heads/tails result
+- All animations should build tension and have a clear resolution moment
+- Winner announcement with confetti or celebration effect
+- Option to "Save Decision" that stores the result
+
+## Real-time Updates & Notifications
+- Toast notifications for key events:
+  * "New participant joined"
+  * "New option added"
+  * "Voting now open"
+  * "5 minutes left to vote"
+  * "It's a tie!"
+  * "Decision made!"
+- Activity feed in sidebar or bottom of screen (collapsible on mobile)
+- Subtle indicators for changes without disrupting the main experience
+- Polling mechanism that updates UI elements without full page refresh
+
+## Empty & Loading States
+- Engaging loading animations themed around dice/chance
+- Empty states with helpful guidance text
+- Error states with clear recovery options
+- Skeleton screens during data fetching
+- "Room closed" or "Voting ended" states for returning users
