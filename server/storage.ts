@@ -259,7 +259,7 @@ export class MemStorage implements IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
-  sessionStore: session.SessionStore;
+  sessionStore: session.Store;
   
   constructor() {
     this.sessionStore = new PostgresSessionStore({ 
@@ -468,22 +468,19 @@ export class DatabaseStorage implements IStorage {
       return [];
     }
     
-    const optionIds = roomOptions.map(opt => opt.id);
-    
-    const query = `
+    // Use drizzle-orm's SQL builder for a safer query
+    const result = await db.execute<{ optionId: number, voteCount: number }>(sql`
       SELECT 
         o.id AS "optionId", 
         COUNT(v.id) AS "voteCount"
-      FROM ${options.$schema}.${options.$name} o
-      LEFT JOIN ${votes.$schema}.${votes.$name} v ON o.id = v."optionId"
-      WHERE o."roomId" = $1
+      FROM options o
+      LEFT JOIN votes v ON o.id = v."optionId"
+      WHERE o."roomId" = ${roomId}
       GROUP BY o.id
       ORDER BY "voteCount" DESC
-    `;
+    `);
     
-    const { rows } = await pool.query(query, [roomId]);
-    
-    return rows.map(row => ({
+    return result.map(row => ({
       optionId: Number(row.optionId),
       voteCount: Number(row.voteCount)
     }));
