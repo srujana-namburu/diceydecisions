@@ -346,13 +346,33 @@ export class DatabaseStorage implements IStorage {
   }
   
   async getRoom(id: number): Promise<Room | undefined> {
-    const [room] = await db.select().from(rooms).where(eq(rooms.id, id));
-    return room;
+    console.log('DatabaseStorage.getRoom called with id:', id);
+    console.log('ID type:', typeof id);
+    
+    try {
+      console.log('Executing SQL query to find room by id');
+      const [room] = await db.select().from(rooms).where(eq(rooms.id, id));
+      console.log('Room query result:', room);
+      return room;
+    } catch (error) {
+      console.error('Error in getRoom:', error);
+      throw error;
+    }
   }
   
   async getRoomByCode(code: string): Promise<Room | undefined> {
-    const [room] = await db.select().from(rooms).where(eq(rooms.code, code));
-    return room;
+    console.log('DatabaseStorage.getRoomByCode called with code:', code);
+    console.log('Code type:', typeof code);
+    
+    try {
+      console.log('Executing SQL query to find room by code');
+      const [room] = await db.select().from(rooms).where(eq(rooms.code, code));
+      console.log('Room query result:', room);
+      return room;
+    } catch (error) {
+      console.error('Error in getRoomByCode:', error);
+      throw error;
+    }
   }
   
   async getRoomsByUserId(userId: number): Promise<Room[]> {
@@ -421,10 +441,22 @@ export class DatabaseStorage implements IStorage {
   }
   
   async getOptionsByRoomId(roomId: number): Promise<Option[]> {
-    return await db.select()
-      .from(options)
-      .where(eq(options.roomId, roomId))
-      .orderBy(asc(options.createdAt));
+    console.log("getOptionsByRoomId called with roomId:", roomId);
+    console.log("roomId type:", typeof roomId);
+    
+    try {
+      console.log("Executing SQL query to find options for room");
+      const optionsResult = await db.select()
+        .from(options)
+        .where(eq(options.roomId, roomId))
+        .orderBy(asc(options.createdAt));
+      
+      console.log("Options query result:", optionsResult);
+      return optionsResult;
+    } catch (error) {
+      console.error("Error in getOptionsByRoomId:", error);
+      throw error;
+    }
   }
   
   async addParticipant(roomId: number, userId: number): Promise<Participant> {
@@ -468,21 +500,61 @@ export class DatabaseStorage implements IStorage {
   }
   
   async createVote(voteData: Omit<Vote, "id" | "createdAt">): Promise<Vote> {
-    // Delete any existing votes from this user for this room
-    const roomOptions = await this.getOptionsByRoomId(voteData.roomId);
-    const optionIds = roomOptions.map(opt => opt.id);
+    console.log("createVote called with data:", voteData);
+    console.log("voteData types:", {
+      roomIdType: typeof voteData.roomId,
+      userIdType: typeof voteData.userId,
+      optionIdType: typeof voteData.optionId
+    });
     
-    if (optionIds.length > 0) {
-      await db.delete(votes)
-        .where(and(
-          eq(votes.userId, voteData.userId),
-          sql`${votes.optionId} IN (${optionIds.join(',')})`
-        ));
+    try {
+      // First, verify that the option belongs to the room
+      console.log("Verifying option belongs to room");
+      const option = await this.getOption(voteData.optionId);
+      
+      if (!option) {
+        console.error("Option not found:", voteData.optionId);
+        throw new Error("Option not found");
+      }
+      
+      if (option.roomId !== voteData.roomId) {
+        console.error("Option does not belong to room:", {
+          optionRoomId: option.roomId,
+          requestedRoomId: voteData.roomId
+        });
+        throw new Error("Option does not belong to this room");
+      }
+      
+      console.log("Option verification passed");
+      
+      // Delete any existing votes from this user for this room directly
+      console.log("Deleting existing votes for user in room");
+      try {
+        await db.delete(votes)
+          .where(and(
+            eq(votes.userId, voteData.userId),
+            eq(votes.roomId, voteData.roomId)
+          ));
+        console.log("Existing votes deleted successfully");
+      } catch (error) {
+        console.error("Error deleting existing votes:", error);
+        // Continue with the insert anyway
+      }
+      
+      // Insert the new vote
+      console.log("Inserting new vote:", voteData);
+      try {
+        const [vote] = await db.insert(votes).values(voteData).returning();
+        console.log("Vote inserted successfully:", vote);
+        return vote;
+      } catch (error) {
+        console.error("Error inserting vote:", error);
+        throw new Error("Failed to insert vote: " + (error instanceof Error ? error.message : String(error)));
+      }
+    } catch (error) {
+      console.error("Error in createVote:", error);
+      throw error;
     }
-    
-    // Insert the new vote
-    const [vote] = await db.insert(votes).values(voteData).returning();
-    return vote;
   }
   
   async getUserVoteInRoom(roomId: number, userId: number): Promise<Vote | undefined> {

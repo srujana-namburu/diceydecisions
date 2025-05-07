@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams } from "wouter";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/layouts/app-layout";
 import { Room, Option } from "@shared/schema";
 import { Dice } from "@/components/ui/dice";
@@ -54,6 +54,7 @@ export default function DecisionRoomPage() {
   const [activeTab, setActiveTab] = useState("options");
   const [showTiebreaker, setShowTiebreaker] = useState(false);
   const [tiebreakerMethod, setTiebreakerMethod] = useState<TiebreakerMethod>("random");
+  const [voteError, setVoteError] = useState<string | null>(null);
 
   // Fetch room details
   const { data: room, isLoading: roomLoading } = useQuery<Room>({
@@ -68,20 +69,31 @@ export default function DecisionRoomPage() {
   });
 
   // Fetch members (users) of the room
-  const { data: members = [], isLoading: membersLoading, refetch: refetchMembers } = useQuery<{ id: number, username: string, displayName: string, email: string }[]>({
+  interface Member {
+    id: number;
+    username: string;
+    displayName: string;
+    email: string;
+  }
+
+  const { data: members = [], isLoading: membersLoading } = useQuery<Member[]>({
     queryKey: [`/api/rooms/${room?.id}/members`],
-    enabled: !!room?.id,
-    onSuccess: (data: any) => {
-      console.log('Successfully fetched members:', data);
+    queryFn: async () => {
+      if (!room?.id) return [];
+      try {
+        const response = await fetch(`/api/rooms/${room.id}/members`, {
+          credentials: 'include'
+        });
+        if (!response.ok) {
+          throw new Error('Failed to fetch members');
+        }
+        return await response.json();
+      } catch (error) {
+        console.error('Error fetching members:', error);
+        return [];
+      }
     },
-    onError: (error: any) => {
-      console.error('Error fetching members:', error);
-      toast({
-        title: "Failed to load participants",
-        description: "Could not load the room participants. Please try refreshing the page.",
-        variant: "destructive",
-      });
-    }
+    enabled: !!room?.id
   });
 
   // Ensure members is always an array
@@ -101,7 +113,7 @@ export default function DecisionRoomPage() {
       });
       
       // Force refetch members
-      refetchMembers();
+      queryClient.invalidateQueries({ queryKey: [`/api/rooms/${room?.id}/members`] });
     } catch (error) {
       console.error('Error debugging participants:', error);
     }
@@ -118,7 +130,7 @@ export default function DecisionRoomPage() {
           title: "Joined room",
           description: "You've been added as a participant",
         });
-        refetchMembers();
+        queryClient.invalidateQueries({ queryKey: [`/api/rooms/${room?.id}/members`] });
       } else {
         const errorData = await response.json();
         toast({
@@ -181,30 +193,45 @@ export default function DecisionRoomPage() {
     });
   };
 
-  // Vote mutation - simplified approach
-  const voteMutation = useMutation({
-    mutationFn: async (data: { roomId: number, optionId: number }) => {
-      console.log('Submitting vote with data:', data);
-      
-      // Use a simple form data approach
-      const formData = new FormData();
-      formData.append('roomId', data.roomId.toString());
-      formData.append('optionId', data.optionId.toString());
-      
-      const response = await fetch('/api/votes-simple', {
-        method: 'POST',
-        body: formData,
-        credentials: 'include'
-      });
-      
+  // Handle vote submission
+  const handleVote = () => {
+    if (!room || !selectedOptionId) {
+      console.error("Cannot vote: room or selectedOptionId is missing", { room, selectedOptionId });
+      setVoteError("Cannot vote: Missing room or option selection");
+      return;
+    }
+
+    console.log("Selected option ID:", selectedOptionId);
+    console.log("Room:", room);
+    console.log("Room ID:", room.id);
+    
+    // Clear any previous errors
+    setVoteError(null);
+    
+    // Use a direct fetch approach for maximum control
+    fetch('/api/votes-simple', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        roomId: room.id,
+        optionId: selectedOptionId
+      }),
+      credentials: 'include'
+    })
+    .then(response => {
+      console.log('Response status:', response.status);
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || `Error: ${response.status}`);
+        return response.text().then(text => {
+          console.error('Error response text:', text);
+          throw new Error(text || `Error: ${response.status}`);
+        });
       }
-      
-      return { success: true };
-    },
-    onSuccess: () => {
+      return response.text();
+    })
+    .then(text => {
+      console.log('Success response:', text);
       toast({
         title: "Vote submitted",
         description: "Your vote has been recorded.",
@@ -212,34 +239,18 @@ export default function DecisionRoomPage() {
       
       // Update UI to show results
       setActiveTab("results");
-      queryClient.invalidateQueries({ queryKey: [`/api/rooms/${room?.id}/results`] });
-    },
-    onError: (error: any) => {
-      console.error('Vote mutation error:', error);
+      queryClient.invalidateQueries({ queryKey: [`/api/rooms/${room.id}/results`] });
+    })
+    .catch(error => {
+      console.error('Vote submission error:', error);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      setVoteError(error.message || "An error occurred. Please try again.");
       toast({
         title: "Failed to submit vote",
         description: error.message || "An error occurred. Please try again.",
-        variant: "destructive",
+        variant: "destructive"
       });
-    }
-  });
-
-  // Handle vote submission
-  const handleVote = () => {
-    if (!room?.id || !selectedOptionId) {
-      toast({
-        title: "Selection required",
-        description: "Please select an option to vote.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    console.log(`Submitting vote for option ${selectedOptionId} in room ${room.id}`);
-    
-    voteMutation.mutate({
-      roomId: room.id,
-      optionId: selectedOptionId
     });
   };
 
@@ -367,7 +378,7 @@ export default function DecisionRoomPage() {
   const totalVotes = Array.isArray(voteResults) ? voteResults.length : 0;
 
   // Calculate vote percentages and find the winning option
-  const votePercentages = Array.isArray(voteResults) ? 
+  const votePercentages: Array<{optionId: number, voteCount: number, percentage: number}> = Array.isArray(voteResults) ? 
     Object.entries(voteCountsByOption).map(([optionId, count]) => {
       return {
         optionId: parseInt(optionId),
@@ -574,67 +585,51 @@ export default function DecisionRoomPage() {
             <TabsContent value="voting" className="p-6">
               <h2 className="text-xl font-heading font-semibold mb-4">Cast Your Vote</h2>
               
-              {voteMutation.isError ? (
-                <div className="text-center py-8 border border-dashed border-destructive/20 rounded-lg bg-destructive/10 mb-6">
+              {voteError && (
+                <div className="mb-4 p-4 border border-dashed border-destructive/20 rounded-lg bg-destructive/10">
                   <AlertCircle className="h-12 w-12 mx-auto mb-3 text-destructive" />
                   <h3 className="font-medium text-lg mb-2">Vote Failed</h3>
                   <p className="text-neutral-600 mb-4">
-                    {(voteMutation.error as Error)?.message || "Failed to submit your vote. Please try again."}
+                    {(voteError)}
                   </p>
                   <Button 
                     variant="outline" 
                     className="rounded-lg"
-                    onClick={() => voteMutation.reset()}
+                    onClick={() => setVoteError(null)}
                   >
                     Try Again
                   </Button>
                 </div>
-              ) : (
-                <>
-                  <div className="space-y-3 mb-6">
-                    {options.map((option) => (
-                      <Card 
-                        key={option.id} 
-                        className={`border border-neutral-200 cursor-pointer transition-all hover:shadow-md ${
-                          selectedOptionId === option.id ? "border-primary ring-2 ring-primary ring-opacity-30" : ""
-                        }`}
-                        onClick={() => setSelectedOptionId(option.id)}
-                      >
-                        <CardContent className="p-4">
-                          <div className="flex justify-between items-center">
-                            <p className="font-medium">{option.text}</p>
-                            {selectedOptionId === option.id && (
-                              <Check className="text-primary h-5 w-5" />
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                  
-                  <Button 
-                    className="w-full rounded-lg bg-primary text-white hover:bg-primary/90"
-                    disabled={!selectedOptionId || voteMutation.isPending}
-                    onClick={handleVote}
-                  >
-                    {voteMutation.isPending ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Submitting...
-                      </>
-                    ) : (
-                      <>
-                        <Check className="h-4 w-4 mr-2" />
-                        Confirm Vote
-                      </>
-                    )}
-                  </Button>
-                </>
               )}
               
-              <div className="text-xs text-neutral-500 text-center mt-4">
-                Note: You can only vote once per decision.
+              <div className="space-y-3 mb-6">
+                {options.map((option) => (
+                  <Card 
+                    key={option.id} 
+                    className={`border border-neutral-200 cursor-pointer transition-all hover:shadow-md ${
+                      selectedOptionId === option.id ? "border-primary ring-2 ring-primary ring-opacity-30" : ""
+                    }`}
+                    onClick={() => setSelectedOptionId(option.id)}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex justify-between items-center">
+                        <p className="font-medium">{option.text}</p>
+                        {selectedOptionId === option.id && (
+                          <Check className="text-primary h-5 w-5" />
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
+              
+              <Button 
+                className="w-full rounded-lg bg-primary text-white hover:bg-primary/90"
+                disabled={!selectedOptionId}
+                onClick={handleVote}
+              >
+                Submit Vote
+              </Button>
             </TabsContent>
             
             {/* Results Tab */}
@@ -660,7 +655,7 @@ export default function DecisionRoomPage() {
                 <div className="flex justify-center items-center py-12">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
-              ) : Array.isArray(votePercentages) && votePercentages.length === 0 ? (
+              ) : votePercentages.length === 0 ? (
                 <div className="text-center py-8 border border-dashed border-neutral-200 rounded-lg bg-neutral-50">
                   <BarChart2 className="h-12 w-12 mx-auto mb-3 text-neutral-400" />
                   <h3 className="font-medium text-lg mb-2">No votes yet</h3>
@@ -740,7 +735,7 @@ export default function DecisionRoomPage() {
             <div className="flex justify-center items-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
             </div>
-          ) : members.length === 0 ? (
+          ) : members && members.length === 0 ? (
             <div className="text-center py-8 border border-dashed border-neutral-200 rounded-lg bg-neutral-50">
               <Users className="h-10 w-10 mx-auto mb-3 text-neutral-400" />
               <p className="text-neutral-600">No participants yet</p>

@@ -7,6 +7,7 @@ import { z } from "zod";
 import { insertRoomSchema, insertOptionSchema, users, participants } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql } from "drizzle-orm";
+import bodyParser from "body-parser";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // sets up /api/register, /api/login, /api/logout, /api/user
@@ -19,6 +20,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     next(err);
   });
+
+  // Add JSON body parser
+  app.use(bodyParser.json());
 
   // Room Routes
   app.post("/api/rooms", async (req, res, next) => {
@@ -248,79 +252,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Simple vote endpoint that uses FormData
+  // Simple vote endpoint that uses JSON
   app.post("/api/votes-simple", async (req, res) => {
     try {
       // Basic authentication check
       if (!req.isAuthenticated() || !req.user || !req.user.id) {
+        console.error("Authentication required for vote");
         return res.status(401).send("Authentication required");
       }
 
-      console.log("Vote request received:", req.body);
+      console.log("Vote request received with body:", req.body);
+      console.log("Request user:", req.user);
       
-      // Extract and validate data
-      const roomId = parseInt(req.body.roomId);
-      const optionId = parseInt(req.body.optionId);
+      const { roomId: roomIdRaw, optionId: optionIdRaw } = req.body;
+      const roomId = typeof roomIdRaw === 'string' ? parseInt(roomIdRaw) : roomIdRaw;
+      const optionId = typeof optionIdRaw === 'string' ? parseInt(optionIdRaw) : optionIdRaw;
       const userId = req.user.id;
       
-      // Simple validation
+      console.log("Extracted data:", { roomId, optionId, userId });
+      
       if (isNaN(roomId) || isNaN(optionId)) {
+        console.error("Validation failed:", { roomId, optionId });
         return res.status(400).send("Invalid Room ID or Option ID");
       }
       
-      console.log(`Processing vote: roomId=${roomId}, optionId=${optionId}, userId=${userId}`);
-      
-      // Check if room exists
       const room = await storage.getRoom(roomId);
       if (!room) {
+        console.error("Room not found with ID:", roomId);
         return res.status(404).send("Room not found");
       }
       
-      // Check if option exists
-      const option = await storage.getOption(optionId);
+      const option = await storage.getOption(optionId); // Verify option exists early
       if (!option) {
+        console.error("Option not found with ID:", optionId);
         return res.status(404).send("Option not found");
       }
-      
-      // Make sure option belongs to the room
       if (option.roomId !== roomId) {
+        console.error("Option does not belong to this room:", { optionRoomId: option.roomId, roomId });
         return res.status(400).send("Option does not belong to this room");
       }
       
-      // Add user as participant if not already
       const isParticipant = await storage.isUserParticipant(roomId, userId);
       if (!isParticipant) {
         try {
+          console.log("Adding user as participant:", { roomId, userId });
           await storage.addParticipant(roomId, userId);
           console.log(`User ${userId} added as participant to room ${roomId}`);
-        } catch (error) {
-          console.error("Error adding participant:", error);
-          // Continue anyway - we'll try to record the vote
+        } catch (e) {
+          const addParticipantError = e instanceof Error ? e : new Error(String(e));
+          console.error("Critical error adding participant:", addParticipantError.message);
+          console.error("Details for addParticipant error:", {
+            name: addParticipantError.name,
+            message: addParticipantError.message,
+            stack: addParticipantError.stack
+          });
+          return res.status(500).send("Failed to update participant status. Vote not recorded.");
         }
       }
       
       try {
-        // Delete any existing votes from this user in this room
-        const existingVote = await storage.getUserVoteInRoom(roomId, userId);
-        if (existingVote) {
-          console.log(`Existing vote found for user ${userId} in room ${roomId}, will be replaced`);
-        }
-        
-        // Create the new vote
+        console.log("Creating new vote:", { roomId, userId, optionId });
         const vote = await storage.createVote({
           roomId,
           userId,
           optionId
         });
-        
         console.log(`Vote recorded successfully: ${JSON.stringify(vote)}`);
         return res.status(200).send("Vote recorded successfully");
-      } catch (error) {
-        console.error("Error recording vote:", error);
+      } catch (e) {
+        const createVoteError = e instanceof Error ? e : new Error(String(e));
+        console.error("Error in storage.createVote:", createVoteError.message);
+        console.error("Details for createVote error:", {
+          name: createVoteError.name,
+          message: createVoteError.message,
+          stack: createVoteError.stack
+        });
         return res.status(500).send("Error recording vote");
       }
-    } catch (error) {
-      console.error("Error in vote endpoint:", error);
+    } catch (e) {
+      const mainError = e instanceof Error ? e : new Error(String(e));
+      console.error("Overall error in /api/votes-simple:", mainError.message);
+      console.error("Details for overall error:", {
+        name: mainError.name,
+        message: mainError.message,
+        stack: mainError.stack
+      });
       return res.status(500).send("Internal server error");
     }
   });

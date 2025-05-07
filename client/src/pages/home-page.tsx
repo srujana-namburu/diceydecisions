@@ -1,19 +1,107 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Room } from "@shared/schema";
 import { AppLayout } from "@/layouts/app-layout";
-import { DecisionCard } from "@/components/decision-card";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Dice } from "@/components/ui/dice";
-import { PlusCircle, Users, History, RefreshCw, SearchX } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { PlusCircle, Users, History, RefreshCw, SearchX, Calendar, ListChecks } from "lucide-react";
 import { useLocation } from "wouter";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+
+interface DecisionCardProps {
+  id: number;
+  title: string;
+  createdAt: string;
+  isCompleted: boolean;
+  participantCount: number;
+  optionCount: number;
+  participants: any[];
+  onClick: () => void;
+  buttonText: string;
+}
+
+function DecisionCard({
+  id,
+  title,
+  createdAt,
+  isCompleted,
+  participantCount,
+  optionCount,
+  participants,
+  onClick,
+  buttonText
+}: DecisionCardProps) {
+  const now = Date.now();
+  const createdTime = new Date(createdAt).getTime();
+  const THIRTY_MINUTES = 30 * 60 * 1000;
+  const isExpired = now - createdTime > THIRTY_MINUTES;
+  
+  // Always show in-progress badge for non-completed decisions
+  const isInProgress = !isCompleted;
+  
+  // Format the time difference
+  const timeDiff = now - createdTime;
+  const hours = Math.floor(timeDiff / (60 * 60 * 1000));
+  const minutes = Math.floor((timeDiff % (60 * 60 * 1000)) / (60 * 1000));
+  
+  let timeText = "";
+  if (isCompleted) {
+    timeText = `Decided about ${hours > 0 ? `${hours} hours` : `${minutes} minutes`} ago`;
+  } else {
+    timeText = `Started about ${hours > 0 ? `${hours} hours` : `${minutes} minutes`} ago`;
+  }
+
+  return (
+    <Card className="overflow-hidden transition-all hover:shadow-md">
+      <div className="p-4">
+        <div className="flex justify-between items-start mb-2">
+          <h3 className="font-medium text-lg truncate">{title}</h3>
+          {isCompleted ? (
+            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+              Completed
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+              In Progress
+            </Badge>
+          )}
+        </div>
+        
+        <p className="text-sm text-muted-foreground mb-3">
+          <Calendar className="inline-block w-3 h-3 mr-1" />
+          {timeText}
+        </p>
+        
+        <div className="flex space-x-4 text-sm text-muted-foreground mb-4">
+          <div className="flex items-center">
+            <ListChecks className="w-3 h-3 mr-1" />
+            <span>Options: {optionCount}</span>
+          </div>
+          <div className="flex items-center">
+            <Users className="w-3 h-3 mr-1" />
+            <span>{participantCount} participants</span>
+          </div>
+        </div>
+        
+        <Button 
+          variant="default" 
+          size="sm" 
+          className="w-full"
+          onClick={onClick}
+        >
+          {buttonText}
+        </Button>
+      </div>
+    </Card>
+  );
+}
 
 export default function HomePage() {
   const { user } = useAuth();
@@ -21,6 +109,7 @@ export default function HomePage() {
   const { toast } = useToast();
   const [roomCode, setRoomCode] = useState("");
   const [selectedTab, setSelectedTab] = useState<"active" | "past">("active");
+  const queryClient = useQueryClient();
   
   // Fetch rooms
   const { data: rooms = [], isLoading: isLoadingRooms, refetch: refetchRooms } = useQuery<Room[]>({
@@ -89,25 +178,27 @@ export default function HomePage() {
   const now = Date.now();
   const THIRTY_MINUTES = 30 * 60 * 1000;
 
+  // Debug the filtering process
+  console.log("All rooms before filtering:", rooms);
+
   // Simplified filtering logic to ensure rooms are displayed
   const filteredRooms = rooms.filter((room: Room) => {
-    console.log(`Filtering room ${room.id}: ${room.title}, isCompleted=${room.isCompleted}`);
-    
-    // Filter based on the selected tab
     const isExpired = now - new Date(room.createdAt).getTime() > THIRTY_MINUTES;
+    const isInProgress = !room.isCompleted;
+    
+    console.log(`Filtering room ${room.id}: ${room.title}, isCompleted=${room.isCompleted}, isExpired=${isExpired}, isInProgress=${isInProgress}`);
     
     if (selectedTab === "active") {
-      return !room.isCompleted && !isExpired;
+      // Show all in-progress rooms in the active tab regardless of expiration
+      return isInProgress;
     } else {
-      return room.isCompleted || isExpired;
+      // Only show completed rooms in the past tab
+      return room.isCompleted;
     }
   });
   
-  // Debug logs
-  console.log("[DEBUG] user:", user);
-  console.log("[DEBUG] rooms:", rooms);
-  console.log("[DEBUG] roomDetails:", roomDetails);
-  console.log("[DEBUG] filteredRooms:", filteredRooms);
+  // Debug the filtered results
+  console.log("Filtered rooms:", filteredRooms);
   
   // Join room mutation
   const joinRoomMutation = useMutation({
@@ -116,7 +207,7 @@ export default function HomePage() {
       return await response.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/rooms"] });
+      refetchRooms();
       toast({
         title: "Room joined!",
         description: `You've successfully joined the room "${data.title}".`,
@@ -253,7 +344,7 @@ export default function HomePage() {
           <div className="flex justify-center items-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
           </div>
-        ) : rooms.length === 0 ? (
+        ) : filteredRooms.length === 0 ? (
           <div className="text-center py-12">
             <div className="mb-4">
               <div className="mx-auto w-16 h-16 rounded-full bg-muted flex items-center justify-center">
@@ -263,8 +354,8 @@ export default function HomePage() {
             <h3 className="font-medium text-lg mb-2">No decisions found</h3>
             <p className="text-muted-foreground mb-6">
               {selectedTab === "active"
-                ? "You don't have any active decisions. Create a new one to get started!"
-                : "You don't have any past decisions. Completed decisions will appear here."}
+                ? "You don't have any active or in-progress decisions. Create a new one to get started!"
+                : "You don't have any completed decisions. Completed decisions will appear here."}
             </p>
           </div>
         ) : (
